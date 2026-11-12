@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, Mic, Square, X } from 'lucide-react'
 import { cropPhoto, db, unwrap } from './data'
+import { formatElapsed } from './elapsed'
 import { ErrorMessage, Field, Page, useAction } from './ui'
 
 type Bucket = 'our-space-chat-media' | 'our-space-memories'
@@ -84,7 +85,13 @@ export function PrivateMedia({
   )
 }
 
-type Draft = { blob: Blob; kind: MediaKind; contentType: string; id: string }
+type Draft = {
+  duration?: number
+  blob: Blob
+  kind: MediaKind
+  contentType: string
+  id: string
+}
 export function ChatAttachments({
   userId,
   onSent,
@@ -95,6 +102,19 @@ export function ChatAttachments({
   const [draft, setDraft] = useState<Draft>()
   const [preview, setPreview] = useState('')
   const [recording, setRecording] = useState(false)
+  const [recordedSeconds, setRecordedSeconds] = useState(0)
+  const startedAt = useRef(0)
+  useEffect(() => {
+    if (!recording) return
+    const timer = setInterval(
+      () =>
+        setRecordedSeconds(
+          Math.floor((performance.now() - startedAt.current) / 1000),
+        ),
+      200,
+    )
+    return () => clearInterval(timer)
+  }, [recording])
   const [micError, setMicError] = useState('')
   const [starting, setStarting] = useState(false)
   const recorder = useRef<MediaRecorder | null>(null)
@@ -150,11 +170,14 @@ export function ChatAttachments({
           stream.getTracks().forEach((track) => track.stop())
           if (!mounted.current) return
           setRecording(false)
+          setRecordedSeconds(0)
+          const duration = (performance.now() - startedAt.current) / 1000
           const blob = new Blob(chunks, { type: mimeType })
           if (blob.size && blob.size <= 8388608)
             setDraft({
               blob,
               kind: 'audio',
+              duration,
               contentType: mimeType,
               id: crypto.randomUUID(),
             })
@@ -163,7 +186,12 @@ export function ChatAttachments({
               'Could not save this recording. Try a shorter voice note.',
             )
         }
+        next.onerror = () => {
+          if (mounted.current) setMicError('Recording was interrupted.')
+        }
         next.start()
+        startedAt.current = performance.now()
+        setRecordedSeconds(0)
         setRecording(true)
         timer.current = setTimeout(() => {
           if (next.state === 'recording') next.stop()
@@ -220,7 +248,8 @@ export function ChatAttachments({
         </button>
         {recording && (
           <span className="hint" role="status">
-            Recording…
+            <span className="recording-dot" aria-hidden /> Recording{' '}
+            <time>{formatElapsed(recordedSeconds)}</time>
           </span>
         )}
       </div>
@@ -229,7 +258,10 @@ export function ChatAttachments({
           {draft.kind === 'photo' ? (
             <img src={preview} alt="Photo preview" />
           ) : (
-            <audio controls src={preview} aria-label="Voice note preview" />
+            <>
+              <audio controls src={preview} aria-label="Voice note preview" />
+              <time>{formatElapsed(draft.duration ?? 0)}</time>
+            </>
           )}
           <button
             type="button"

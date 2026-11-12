@@ -45,6 +45,16 @@ const profiles = [
   },
 ]
 
+test.use({
+  permissions: ['microphone'],
+  launchOptions: {
+    args: [
+      '--use-fake-device-for-media-stream',
+      '--use-fake-ui-for-media-stream',
+    ],
+  },
+})
+
 test.beforeEach(async ({ page }) => {
   test.skip(
     Boolean(process.env.TEST_BASE_URL),
@@ -196,6 +206,8 @@ test('signed-in screens, themes, search and future child form', async ({
   await expect(page.getByText('I need a hug')).toBeVisible()
   await expect(page.getByText('Seen', { exact: true })).toBeVisible()
   await page.screenshot({ path: info.outputPath('chat.png') })
+  await expect(nav).toHaveCount(0)
+  await page.getByRole('button', { name: 'Back to Home' }).click()
   await nav.getByRole('button', { name: 'Our Dates' }).click()
   await expect(page.getByText('Our First Kiss', { exact: true })).toBeVisible()
   await expect(page.getByText('Date not set yet · Tap to add')).toBeVisible()
@@ -370,3 +382,93 @@ for (const [index, width] of widths.entries()) {
     },
   )
 }
+
+test('voice note clock starts, stops and shows final duration', async ({
+  page,
+}) => {
+  await page.goto('/chat')
+  await page.getByRole('button', { name: 'Record voice note' }).click()
+  const timer = page.locator('.chat-attachments time')
+  await expect(timer).toHaveText('00:00')
+  await expect(timer).toHaveText(/^00:0[1-5]$/)
+  await page.getByRole('button', { name: 'Stop recording' }).click()
+  await expect(
+    page.locator('audio[aria-label="Voice note preview"]'),
+  ).toBeVisible()
+  await expect(timer).toHaveText(/^00:0[1-5]$/)
+  await page.getByRole('button', { name: 'Discard attachment' }).click()
+  await expect(timer).toHaveCount(0)
+})
+
+const callId = 'bb76d540-9327-4e22-9f52-36dcf43e672b'
+for (const [i, width] of [320, 375, 390, 430].entries()) {
+  test(
+    'incoming call layout and decline at ' + width + 'px',
+    async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 844 })
+      let status = 'ringing'
+      const row = () => ({
+        id: callId,
+        caller_id: second,
+        recipient_id: first,
+        status,
+        offer: 'mock offer',
+        answer: null,
+        expires_at: new Date(Date.now() + 45000).toISOString(),
+      })
+      await page.route('**/rest/v1/voice_calls?**', (route) =>
+        route.fulfill({ json: row() }),
+      )
+      await page.route('**/rest/v1/rpc/change_voice', async (route) => {
+        const payload = route.request().postDataJSON()
+        expect(payload).toMatchObject({ call_id: callId, operation: 'decline' })
+        status = 'declined'
+        return route.fulfill({ json: row() })
+      })
+      await page.goto('/chat?call=' + callId)
+      const screen = page.getByRole('region', { name: 'Incoming Voice Call' })
+      await expect(screen.getByRole('button', { name: 'Answer' })).toBeVisible()
+      await expect(screen).toContainText('Semsem is calling')
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBe(width)
+      await page.screenshot({
+        path: info.outputPath('incoming-' + width + '.png'),
+      })
+      await screen.getByRole('button', { name: 'Decline' }).click()
+      await expect(screen).toHaveCount(0)
+      expect(status).toBe('declined')
+      await expect(
+        page.getByRole('navigation', { name: 'Main navigation' }),
+      ).toHaveCount(0)
+      await expect(page.getByText('Pending', { exact: true })).toHaveCount(0)
+      if (i === 3)
+        await expect(
+          page.getByRole('button', { name: 'Back to Home' }),
+        ).toBeVisible()
+    },
+  )
+}
+
+test('expired notification link shows a missed call', async ({ page }) => {
+  await page.route('**/rest/v1/voice_calls?**', (route) =>
+    route.fulfill({
+      json: {
+        id: callId,
+        caller_id: second,
+        recipient_id: first,
+        status: 'missed',
+        offer: null,
+        answer: null,
+        expires_at: new Date(Date.now() - 1000).toISOString(),
+      },
+    }),
+  )
+  await page.goto('/chat?call=' + callId)
+  await expect(
+    page.getByText('Missed voice call.', { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Answer' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Dismiss' }).click()
+  await expect(page).toHaveURL(/\/chat$/)
+})

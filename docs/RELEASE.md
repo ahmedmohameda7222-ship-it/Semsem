@@ -21,4 +21,10 @@ Verify the following with the two enrolled devices.
 - Test private profile and child photo uploads, the chat keyboard, Home Screen safe areas, and notification disable.
 - Confirm changing a date does not notify either user.
 
-Chat supports private photo attachments and voice notes. Our World includes a shared Memories gallery with captions. To start a live voice call, both people open Chat and allow microphone access. Calls use peer-to-peer WebRTC and public STUN for network discovery. A TURN relay is not configured, so a restrictive network may prevent the call from connecting.
+Chat supports private photos, voice notes with elapsed time, and a shared Memories gallery. Incoming calls are stored for 45 seconds and can be recovered from a call notification. Answer and Decline are inside the installed web app. While a call is connected, both participants renew its lease. Expired calls are marked missed or ended and their SDP is cleared.
+
+## Voice relay setup
+
+The protected `/api/voice` endpoint uses Cloudflare Realtime TURN when both `CLOUDFLARE_TURN_KEY_ID` and `CLOUDFLARE_TURN_API_TOKEN` are set in Vercel Production. Create a TURN key in Cloudflare Realtime and store its ID and token as sensitive server-side variables, then redeploy. The endpoint returns short-lived ICE credentials only to an enrolled profile. The relay status in the authenticated response is `true` only when the provider returns TURN endpoints.
+
+Without these variables, calls use direct ICE with STUN and can fail on networks that require a relay. Test with one iPhone on Wi-Fi and the other on cellular, then with both phones on different Wi-Fi networks. Verify two-way audio, cancellation, decline, a missed call, and return to Chat during an active call. iPhone Web Push opens the invitation. Native lock-screen answering and continuous background call behavior require a native iOS integration.

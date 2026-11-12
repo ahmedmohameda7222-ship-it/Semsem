@@ -27,6 +27,7 @@ import {
   ProfilePage,
 } from './Profile'
 import { Memories } from './Media'
+import { VoiceCallProvider } from './VoiceCall'
 import { ChildEditor, Family, Jar, NoteEditor, World } from './World'
 import { configured, db, unwrap } from './data'
 import type { Child, Milestone, Note, Profile, Template } from './data'
@@ -122,7 +123,7 @@ function PrivateSpace({ userId, online }: { userId: string; online: boolean }) {
   const [unread, setUnread] = useState(0)
   const [returnTo] = useState(() => {
     const value = sessionStorage.getItem('our-space-return')
-    return value?.startsWith('/chat?entry=') ? value : '/home'
+    return value && /^\/chat\?(entry|call)=/.test(value) ? value : '/home'
   })
   useEffect(() => {
     sessionStorage.removeItem('our-space-return')
@@ -234,7 +235,7 @@ function PrivateSpace({ userId, online }: { userId: string; online: boolean }) {
     )
 
   return (
-    <>
+    <VoiceCallProvider me={me} partner={partner}>
       <Routes location={location}>
         <Route
           path="/home"
@@ -319,33 +320,34 @@ function PrivateSpace({ userId, online }: { userId: string; online: boolean }) {
         />
         <Route path="*" element={<Navigate to={returnTo} replace />} />
       </Routes>
-      {tabs.some(([path]) => path === location.pathname) && (
-        <nav className="bottom" aria-label="Main navigation">
-          {tabs.map(([path, title, Icon]) => {
-            const active = path === location.pathname
-            return (
-              <button
-                key={path}
-                className={active ? 'on' : ''}
-                aria-current={active ? 'page' : undefined}
-                onClick={() => navigate(path)}
-              >
-                <span className="nav-circle">
-                  <Icon className="icon" />
-                  {path === '/chat' && unread > 0 && (
-                    <span className="nav-badge">
-                      {unread > 9 ? '9+' : unread}
-                    </span>
-                  )}
-                </span>
-                {title}
-              </button>
-            )
-          })}
-        </nav>
-      )}
+      {location.pathname !== '/chat' &&
+        tabs.some(([path]) => path === location.pathname) && (
+          <nav className="bottom" aria-label="Main navigation">
+            {tabs.map(([path, title, Icon]) => {
+              const active = path === location.pathname
+              return (
+                <button
+                  key={path}
+                  className={active ? 'on' : ''}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => navigate(path)}
+                >
+                  <span className="nav-circle">
+                    <Icon className="icon" />
+                    {path === '/chat' && unread > 0 && (
+                      <span className="nav-badge">
+                        {unread > 9 ? '9+' : unread}
+                      </span>
+                    )}
+                  </span>
+                  {title}
+                </button>
+              )
+            })}
+          </nav>
+        )}
       <Celebration me={me} dates={space.dates} />
-    </>
+    </VoiceCallProvider>
   )
 }
 

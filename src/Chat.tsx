@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Search, Send, SmilePlus, Star, X } from 'lucide-react'
+import { ChevronLeft, Search, Send, SmilePlus, Star, X } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { db, flushPush, unwrap } from './data'
 import type { Entry, Profile, Reaction } from './data'
@@ -9,7 +9,7 @@ import { ChatLibrary } from './ChatLibrary'
 import type { LibraryMode } from './ChatLibrary'
 import { reactionOptions } from './chatOptions'
 import { ChatAttachments, PrivateMedia } from './Media'
-import { VoiceCall } from './VoiceCall'
+import { VoiceCallButton } from './VoiceCall'
 
 const pageSize = 30
 let typingChannelCleanup = Promise.resolve()
@@ -378,6 +378,13 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
       <div className="chat-head">
         <button
           className="chat-action"
+          aria-label="Back to Home"
+          onClick={() => navigate('/home')}
+        >
+          <ChevronLeft size={20} />
+        </button>
+        <button
+          className="chat-action"
           aria-label="Open profile"
           onClick={() => navigate('/profile')}
         >
@@ -414,13 +421,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
         >
           <Star size={19} />
         </button>
-        {partner && (
-          <VoiceCall
-            me={me.id}
-            partner={partner.id}
-            nickname={partner.nickname}
-          />
-        )}
+        {partner && <VoiceCallButton />}
       </div>
       {library && (
         <ChatLibrary
@@ -636,9 +637,9 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
                       </div>
                       <h4>{entry.title}</h4>
                     </div>
-                    <span className="request-status">
-                      {entry.responded_at || entry.read_at ? 'Seen' : 'Pending'}
-                    </span>
+                    {(entry.responded_at || entry.read_at) && (
+                      <span className="request-status">Seen</span>
+                    )}
                   </div>
                   <p>{entry.body}</p>
                   <div className="chat-entry-footer">

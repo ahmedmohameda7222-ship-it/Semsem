@@ -34,20 +34,7 @@ export async function deliverPush() {
       try {
         if (!allowedEndpoint(job.endpoint))
           throw new Error('Unsupported push endpoint')
-        await webpush.sendNotification(
-          { endpoint: job.endpoint, keys: job.keys },
-          JSON.stringify(pushPayload(job)),
-          {
-            TTL: 3600,
-            topic: job.event_id.replaceAll('-', ''),
-            timeout: 7000,
-            vapidDetails: {
-              subject: process.env.VAPID_SUBJECT,
-              publicKey: process.env.VAPID_PUBLIC_KEY,
-              privateKey: process.env.VAPID_PRIVATE_KEY,
-            },
-          },
-        )
+        await sendWebPush(job, pushPayload(job), job.event_id, 3600)
         update = { delivered_at: new Date().toISOString() }
       } catch (failure) {
         if ([404, 410].includes(failure.statusCode)) {
@@ -70,5 +57,29 @@ export async function deliverPush() {
         .match(match)
       if (updateError) throw updateError
     }),
+  )
+}
+
+export function sendWebPush(
+  subscription,
+  payload,
+  id,
+  ttl,
+  urgency = 'normal',
+) {
+  return webpush.sendNotification(
+    { endpoint: subscription.endpoint, keys: subscription.keys },
+    JSON.stringify(payload),
+    {
+      TTL: ttl,
+      urgency,
+      topic: id.replaceAll('-', ''),
+      timeout: 7000,
+      vapidDetails: {
+        subject: process.env.VAPID_SUBJECT,
+        publicKey: process.env.VAPID_PUBLIC_KEY,
+        privateKey: process.env.VAPID_PRIVATE_KEY,
+      },
+    },
   )
 }

@@ -57,13 +57,14 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     (async () => {
       const data = event.data?.json()
-      if (!data || !/^[0-9a-f-]{36}$/i.test(data.entry)) return
+      const id = data?.call || data?.entry
+      if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return
       await self.registration.showNotification(data.title || 'Our Space', {
         body: data.body || 'You have a new message.',
-        tag: data.entry,
+        tag: id,
         renotify: false,
         icon: '/icons/192.png',
-        data: { entry: data.entry },
+        data: data.call ? { call: id } : { entry: id },
       })
     })(),
   )
@@ -71,13 +72,18 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const entry = event.notification.data?.entry
-  if (!/^[0-9a-f-]{36}$/i.test(entry ?? '')) return
-  const path = '/chat?entry=' + encodeURIComponent(entry)
+  const { call, entry } = event.notification.data || {}
+  const id = call || entry
+  if (!/^[0-9a-f-]{36}$/i.test(id ?? '')) return
+  const path = '/chat?' + (call ? 'call=' : 'entry=') + encodeURIComponent(id)
   event.waitUntil(
     (async () => {
       for (const client of await self.clients.matchAll({ type: 'window' })) {
         if (new URL(client.url).origin === self.location.origin) {
+          if (call && 'postMessage' in client) {
+            client.postMessage({ type: 'our-space-call', call })
+            return client.focus()
+          }
           const navigated = await client.navigate(path)
           if (navigated) return navigated.focus()
         }
