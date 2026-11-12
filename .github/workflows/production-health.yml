@@ -1,0 +1,32 @@
+name: Our Space production uptime and security
+
+on:
+  schedule:
+    # Twice daily (UTC), after deployment and independent of the app being open.
+    - cron: '17 7,19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out current production source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify public uptime and security controls
+        run: node scripts/production-health.mjs
+
+      - name: Verify dependency advisories
+        run: |
+          npm ci
+          npm audit --audit-level=high
