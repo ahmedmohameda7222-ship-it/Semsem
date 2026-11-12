@@ -383,27 +383,31 @@ for (const [index, width] of widths.entries()) {
   )
 }
 
-test('voice note clock starts, stops and shows final duration', async ({
+test('recording replaces chat composer; pause permits replay and delete', async ({
   page,
 }, info) => {
   await page.setViewportSize({ width: 320, height: 780 })
   await page.goto('/chat')
   await page.getByRole('button', { name: 'Record voice note' }).click()
+  await expect(page.locator('form.compose.voice-active')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Message' })).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeHidden()
   const timer = page.locator('.voice-recording-status time')
   await expect(timer).toHaveText('00:00')
   await expect(page.getByRole('img', { name: 'Live microphone waveform' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Delete voice note' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send voice note' })).toBeVisible()
   await expect(timer).toHaveText(/^00:0[1-5]$/)
-  await page.getByRole('button', { name: 'Stop recording' }).click()
-  await expect(
-    page.locator('audio[aria-label="Voice note preview"]'),
-  ).toBeAttached()
-  await expect(page.locator('.attachment-draft .voice-bar')).toHaveCount(36)
+  await page.getByRole('button', { name: 'Pause recording' }).click()
   await expect(page.getByRole('button', { name: 'Play Voice note preview' })).toBeVisible()
-  await expect(page.locator('.attachment-draft .voice-times time').last()).toHaveText(/^00:0[1-5]$/)
+  await expect(page.locator('.voice-draft .voice-bar')).toHaveCount(36)
+  await expect(page.getByRole('button', { name: 'Send voice note' })).toBeVisible()
+  await expect(page.locator('.voice-draft .voice-times time').last()).toHaveText(/^00:0[1-5]$/)
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
-  await page.screenshot({ path: info.outputPath('waveform-voice-preview-320.png') })
-  await page.getByRole('button', { name: 'Discard attachment' }).click()
-  await expect(page.locator('.attachment-draft .voice-message')).toHaveCount(0)
+  await page.screenshot({ path: info.outputPath('voice-composer-preview-320.png') })
+  await page.getByRole('button', { name: 'Delete voice note' }).click()
+  await expect(page.locator('form.compose.voice-active')).toHaveCount(0)
+  await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible()
 })
 
 const callId = 'bb76d540-9327-4e22-9f52-36dcf43e672b'
@@ -478,4 +482,12 @@ test('expired notification link shows a missed call', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Answer' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Dismiss' }).click()
   await expect(page).toHaveURL(/\/chat$/)
+})
+
+test('home keeps requested single-line romantic copy', async ({ page }) => {
+  await page.goto('/home')
+  await expect(page.getByText('Your favorite person is just one tap away.')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'I love You Mi Amor' })).toBeVisible()
+  await expect(page.getByText('Just for us two')).toHaveCount(0)
+  await expect(page.getByText('Little requests.')).toHaveCount(0)
 })
