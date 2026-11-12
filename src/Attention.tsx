@@ -100,6 +100,16 @@ const catalog = {
     Plane: 'Travel together',
   },
 }
+const moodChoices = [
+  { id: 'happy', label: 'Happy', emoji: '😊' },
+  { id: 'missing', label: 'Missing you', emoji: '🥺' },
+  { id: 'sad', label: 'Sad', emoji: '😢' },
+  { id: 'tired', label: 'Tired', emoji: '😴' },
+  { id: 'stressed', label: 'Stressed', emoji: '😣' },
+  { id: 'excited', label: 'Excited', emoji: '✨' },
+  { id: 'loved', label: 'Loved', emoji: '🥰' },
+] as const
+
 const labels = Object.assign({}, ...Object.values(catalog)) as Record<
   string,
   string
@@ -190,6 +200,9 @@ export function Home({
   dates: Milestone[]
 }) {
   const navigate = useNavigate()
+  const [moodOpen, setMoodOpen] = useState(false)
+  const [moodMessage, setMoodMessage] = useState('')
+  const moodAction = useAction()
   const [notice, setNotice] = useState('')
   useEffect(() => {
     if (!notice) return
@@ -247,6 +260,41 @@ export function Home({
       </h1>
       <div className="hero">
         <h2>I love You Mi Amor</h2>
+      </div>
+      <div className="mood-panel">
+        <div className="row spread">
+          <div>
+            <strong>How are you feeling?</strong>
+            <p className="hint mt8">{me.mood ? ('Current mood: ' + (moodChoices.find((m) => m.id === me.mood)?.label ?? me.mood)) : 'Share your mood with your person.'}</p>
+          </div>
+          <button type="button" className="outline" aria-label="Set your mood"
+            aria-expanded={moodOpen} onClick={() => setMoodOpen(!moodOpen)}>
+            Set your mood
+          </button>
+        </div>
+        {moodOpen && (
+          <div className="mood-options" aria-label="Choose your mood">
+            {moodChoices.map((mood) => (
+              <button key={mood.id} type="button" disabled={moodAction.busy}
+                aria-pressed={me.mood === mood.id}
+                onClick={() => {
+                  void moodAction.run(async () => {
+                    unwrap(await db.rpc('set_mood', {
+                      new_mood: mood.id,
+                      entry: crypto.randomUUID(),
+                    }))
+                    setMoodOpen(false)
+                    setMoodMessage('Your mood was shared with ' + (partner?.nickname ?? 'your partner') + ' ❤️')
+                    flushPush()
+                  })
+                }}>
+                <span aria-hidden="true">{mood.emoji}</span> {mood.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {moodMessage && <p className="hint mt8" role="status">{moodMessage}</p>}
+        <ErrorMessage value={moodAction.error} />
       </div>
       <div className="sect">
         <h3>Your love buttons</h3>
