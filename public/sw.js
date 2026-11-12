@@ -58,7 +58,7 @@ self.addEventListener('push', (event) => {
     (async () => {
       const data = event.data?.json()
       if (!data || !/^[0-9a-f-]{36}$/i.test(data.entry)) return
-      await self.registration.showNotification('Our Space', {
+      await self.registration.showNotification(data.title || 'Our Space', {
         body: data.body || 'You have a new message.',
         tag: data.entry,
         renotify: false,

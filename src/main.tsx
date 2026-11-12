@@ -26,12 +26,14 @@ import {
   Notifications,
   ProfilePage,
 } from './Profile'
-import { ChildEditor, Family, Jar, Memories, NoteEditor, World } from './World'
+import { Memories } from './Media'
+import { ChildEditor, Family, Jar, NoteEditor, World } from './World'
 import { configured, db, unwrap } from './data'
 import type { Child, Milestone, Note, Profile, Template } from './data'
 import { applyTheme } from './themes'
 import './reference.css'
 import './styles.css'
+import './chatPolish.css'
 
 type Workspace = {
   profiles: Profile[]
@@ -245,7 +247,10 @@ function PrivateSpace({ userId, online }: { userId: string; online: boolean }) {
             />
           }
         />
-        <Route path="/chat" element={<Chat me={me} partner={partner} />} />
+        <Route
+          path="/chat"
+          element={<Chat key={location.search} me={me} partner={partner} />}
+        />
         <Route path="/dates" element={<Dates me={me} dates={space.dates} />} />
         <Route
           path="/dates/:id"
@@ -286,7 +291,7 @@ function PrivateSpace({ userId, online }: { userId: string; online: boolean }) {
           }
         />
         <Route path="/world/jar/new" element={<NoteEditor reload={reload} />} />
-        <Route path="/world/memories" element={<Memories />} />
+        <Route path="/world/memories" element={<Memories userId={me.id} />} />
         <Route
           path="/profile"
           element={<ProfilePage me={me} reload={reload} />}
@@ -299,10 +304,7 @@ function PrivateSpace({ userId, online }: { userId: string; online: boolean }) {
           path="/settings/appearance"
           element={<Appearance me={me} partner={partner} reload={reload} />}
         />
-        <Route
-          path="/settings/notifications"
-          element={<Notifications partner={partner} />}
-        />
+        <Route path="/settings/notifications" element={<Notifications />} />
         <Route path="/settings/install" element={<Install />} />
         <Route
           path="/buttons/:id"

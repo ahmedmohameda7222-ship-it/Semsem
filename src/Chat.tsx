@@ -1,20 +1,18 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Ellipsis, Send, SmilePlus } from 'lucide-react'
+import { Search, Send, SmilePlus, Star, X } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { db, flushPush, unwrap } from './data'
 import type { Entry, Profile, Reaction } from './data'
 import { LoveIcon } from './Attention'
 import { Avatar, ErrorMessage, useAction } from './ui'
+import { ChatLibrary } from './ChatLibrary'
+import type { LibraryMode } from './ChatLibrary'
+import { reactionOptions } from './chatOptions'
+import { ChatAttachments, PrivateMedia } from './Media'
+import { VoiceCall } from './VoiceCall'
 
 const pageSize = 30
 let typingChannelCleanup = Promise.resolve()
-const reactionOptions = ['❤️', '🥰', '😂', '✨']
-const replies = [
-  ['On my way ♡', 'On my way, love ♡'],
-  ['I love you', 'I love you too ❤️'],
-  ['Calling now', 'Calling you now!'],
-  ['Responded', null],
-] as const
 const time = (date: string) =>
   new Date(date).toLocaleTimeString('en-GB', {
     hour: '2-digit',
@@ -39,6 +37,70 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
     failed: boolean
   }>()
   const [reactionFor, setReactionFor] = useState<string>()
+  const [library, setLibrary] = useState<LibraryMode>()
+  const [favorites, setFavorites] = useState<Set<string>>(new Set())
+  const [favoriteRevision, setFavoriteRevision] = useState(0)
+  const [highlight, setHighlight] = useState<string>()
+
+  useEffect(() => {
+    const viewport = window.visualViewport
+    if (!viewport) return
+    const update = () => {
+      const active = document.activeElement
+      const inputFocused =
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement
+      const keyboard =
+        inputFocused && window.innerHeight - viewport.height > 100
+      document.documentElement.classList.toggle('chat-keyboard', keyboard)
+      if (keyboard)
+        document.documentElement.style.setProperty(
+          '--chat-viewport',
+          viewport.height + 'px',
+        )
+    }
+    viewport.addEventListener('resize', update)
+    document.addEventListener('focusin', update)
+    document.addEventListener('focusout', update)
+    return () => {
+      viewport.removeEventListener('resize', update)
+      document.removeEventListener('focusin', update)
+      document.removeEventListener('focusout', update)
+      document.documentElement.classList.remove('chat-keyboard')
+      document.documentElement.style.removeProperty('--chat-viewport')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!target) return
+    setHighlight(target)
+    const timer = setTimeout(() => setHighlight(undefined), 5000)
+    return () => clearTimeout(timer)
+  }, [target])
+  useEffect(() => {
+    if (!entries.length) return
+    let active = true
+    const refresh = async () => {
+      if (document.hidden) return
+      const { data } = await db
+        .from('chat_favorites')
+        .select('entry_id')
+        .in(
+          'entry_id',
+          entries.map((entry) => entry.id),
+        )
+      if (active && data) setFavorites(new Set(data.map((row) => row.entry_id)))
+    }
+    void refresh()
+    const timer = setInterval(() => void refresh(), 8000)
+    window.addEventListener('focus', refresh)
+    return () => {
+      active = false
+      clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [entries, favoriteRevision])
+
   const thread = useRef<HTMLDivElement>(null)
   const scroll = useRef<{ height: number; top: number } | null>(null)
   const stick = useRef(true)
@@ -314,11 +376,17 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
   return (
     <section className="screen chat-screen">
       <div className="chat-head">
-        <Avatar
-          name={partner?.real_name ?? 'Partner'}
-          path={partner?.avatar_path}
-          size="medium"
-        />
+        <button
+          className="chat-action"
+          aria-label="Open profile"
+          onClick={() => navigate('/profile')}
+        >
+          <Avatar
+            name={partner?.real_name ?? 'Partner'}
+            path={partner?.avatar_path}
+            size="medium"
+          />
+        </button>
         <div className="flex1">
           <h3>
             {partner?.nickname ?? 'Your partner'}{' '}
@@ -327,13 +395,59 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
           <p>Our private conversation</p>
         </div>
         <button
-          className="icon-btn"
-          aria-label="Open profile"
-          onClick={() => navigate('/profile')}
+          className="chat-action"
+          aria-label="Search chat"
+          aria-expanded={library === 'search'}
+          onClick={() =>
+            setLibrary(library === 'search' ? undefined : 'search')
+          }
         >
-          <Ellipsis className="icon" />
+          <Search size={19} />
         </button>
+        <button
+          className="chat-action"
+          aria-label="Favorites"
+          aria-expanded={library === 'favorites'}
+          onClick={() =>
+            setLibrary(library === 'favorites' ? undefined : 'favorites')
+          }
+        >
+          <Star size={19} />
+        </button>
+        {partner && (
+          <VoiceCall
+            me={me.id}
+            partner={partner.id}
+            nickname={partner.nickname}
+          />
+        )}
       </div>
+      {library && (
+        <ChatLibrary
+          key={library}
+          mode={library}
+          me={me.id}
+          partner={partner?.nickname ?? 'Your partner'}
+          revision={favoriteRevision}
+          close={() => setLibrary(undefined)}
+          jump={(id) => {
+            setLibrary(undefined)
+            if (target === id) {
+              document
+                .getElementById('entry-' + id)
+                ?.scrollIntoView({ block: 'center' })
+              setHighlight(id)
+              setTimeout(
+                () =>
+                  setHighlight((current) =>
+                    current === id ? undefined : current,
+                  ),
+                5000,
+              )
+            } else navigate('/chat?entry=' + encodeURIComponent(id))
+          }}
+        />
+      )}
       <div
         className="chat-thread"
         ref={thread}
@@ -344,6 +458,11 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
         }}
       >
         <div className="chat-day">Just us two</div>
+        {target && (
+          <button className="link-btn" onClick={() => navigate('/chat')}>
+            Jump to latest
+          </button>
+        )}
         {loading && <p className="hint">Loading conversation…</p>}
         {loadError && (
           <button
@@ -367,6 +486,131 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
           const ownReaction = reactions.find(
             (item) => item.entry_id === entry.id && item.user_id === me.id,
           )
+          const saved = favorites.has(entry.id)
+          const controls = (
+            <div className="chat-entry-tools">
+              {reactions
+                .filter((item) => item.entry_id === entry.id)
+                .map((item) => (
+                  <span className="reaction-badge" key={item.user_id}>
+                    {item.reaction}
+                  </span>
+                ))}
+              <button
+                className="chat-action"
+                aria-label="React to message"
+                aria-expanded={reactionFor === entry.id}
+                onClick={() => setReactionFor(entry.id)}
+              >
+                <SmilePlus size={17} />
+              </button>
+              <button
+                className="chat-action"
+                aria-label={
+                  saved ? 'Remove from favorites' : 'Save to favorites'
+                }
+                aria-pressed={saved}
+                disabled={action.busy}
+                onClick={() =>
+                  void action.run(async () => {
+                    unwrap(
+                      saved
+                        ? await db
+                            .from('chat_favorites')
+                            .delete()
+                            .eq('entry_id', entry.id)
+                        : await db
+                            .from('chat_favorites')
+                            .insert({ entry_id: entry.id }),
+                    )
+                    setFavorites((current) => {
+                      const next = new Set(current)
+                      if (saved) next.delete(entry.id)
+                      else next.add(entry.id)
+                      return next
+                    })
+                    setFavoriteRevision((value) => value + 1)
+                  })
+                }
+              >
+                <Star size={16} fill={saved ? 'currentColor' : 'none'} />
+              </button>
+            </div>
+          )
+          const picker = reactionFor === entry.id && (
+            <div
+              className="reaction-overlay"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setReactionFor(undefined)
+              }}
+            >
+              <button
+                className="reaction-backdrop"
+                aria-label="Close reactions"
+                onClick={() => setReactionFor(undefined)}
+              />
+              <div
+                className="reaction-picker"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Choose a reaction"
+              >
+                <div className="row spread">
+                  <strong>React to message</strong>
+                  <button
+                    autoFocus
+                    className="chat-action"
+                    aria-label="Close reaction picker"
+                    onClick={() => setReactionFor(undefined)}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="reaction-grid">
+                  {reactionOptions.map((reaction) => (
+                    <button
+                      key={reaction}
+                      aria-pressed={ownReaction?.reaction === reaction}
+                      disabled={action.busy}
+                      onClick={() => {
+                        setReactionFor(undefined)
+                        void action.run(async () => {
+                          const match = { entry_id: entry.id, user_id: me.id }
+                          unwrap(
+                            ownReaction?.reaction === reaction
+                              ? await db
+                                  .from('message_reactions')
+                                  .delete()
+                                  .match(match)
+                              : ownReaction
+                                ? await db
+                                    .from('message_reactions')
+                                    .update({ reaction })
+                                    .match(match)
+                                : await db
+                                    .from('message_reactions')
+                                    .insert({ ...match, reaction }),
+                          )
+                          setReactions((current) => [
+                            ...current.filter(
+                              (item) =>
+                                item.entry_id !== entry.id ||
+                                item.user_id !== me.id,
+                            ),
+                            ...(ownReaction?.reaction === reaction
+                              ? []
+                              : [{ ...match, reaction }]),
+                          ])
+                        })
+                      }}
+                    >
+                      {reaction}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )
           return (
             <article
               id={'entry-' + entry.id}
@@ -374,7 +618,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
               className={
                 (entry.title ? 'chat-request' : 'msgrow') +
                 (mine ? ' mine' : '') +
-                (target === entry.id ? ' focused-entry' : '')
+                (highlight === entry.id ? ' focused-entry' : '')
               }
             >
               {entry.title ? (
@@ -393,132 +637,38 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
                       <h4>{entry.title}</h4>
                     </div>
                     <span className="request-status">
-                      {entry.responded_at
-                        ? 'Responded'
-                        : entry.read_at
-                          ? 'Seen'
-                          : 'Pending'}
+                      {entry.responded_at || entry.read_at ? 'Seen' : 'Pending'}
                     </span>
                   </div>
                   <p>{entry.body}</p>
-                  <div className="mini">{time(entry.created_at)}</div>
-                  {!mine && !entry.responded_at && (
-                    <div className="request-actions mt8">
-                      {replies.map(([label, reply]) => (
-                        <button
-                          disabled={action.busy}
-                          key={label}
-                          onClick={() =>
-                            void action.run(async () => {
-                              unwrap(
-                                await db.rpc('respond', {
-                                  entry: entry.id,
-                                  reply,
-                                  reply_id: crypto.randomUUID(),
-                                }),
-                              )
-                              if (reply) flushPush()
-                              const saved = unwrap(
-                                await db
-                                  .from('chat_entries')
-                                  .select('*')
-                                  .eq('id', entry.id)
-                                  .single(),
-                              ) as Entry
-                              setEntries((current) =>
-                                current.map((item) =>
-                                  item.id === saved.id ? saved : item,
-                                ),
-                              )
-                            })
-                          }
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="chat-entry-footer">
+                    <div className="mini">{time(entry.created_at)}</div>
+                    {controls}
+                  </div>
                 </>
               ) : (
                 <div className="bubble">
-                  {entry.body}
-                  <div className="time">
-                    {time(entry.created_at)}
-                    {mine && (entry.read_at ? ' · Read' : ' · Sent')}
+                  {entry.media_kind && entry.media_path && (
+                    <PrivateMedia
+                      bucket="our-space-chat-media"
+                      path={entry.media_path}
+                      kind={entry.media_kind}
+                      alt={entry.body}
+                    />
+                  )}
+                  {(!entry.media_kind ||
+                    !['Photo', 'Voice message'].includes(entry.body)) &&
+                    entry.body}
+                  <div className="chat-entry-footer">
+                    <div className="time">
+                      {time(entry.created_at)}
+                      {mine && (entry.read_at ? ' · Read' : ' · Sent')}
+                    </div>
+                    {controls}
                   </div>
                 </div>
               )}
-              <div className="reactions">
-                <button
-                  className="reaction-button"
-                  aria-label="React to message"
-                  aria-expanded={reactionFor === entry.id}
-                  onClick={() =>
-                    setReactionFor(
-                      reactionFor === entry.id ? undefined : entry.id,
-                    )
-                  }
-                >
-                  <SmilePlus className="icon small" />
-                </button>
-                {reactions
-                  .filter((item) => item.entry_id === entry.id)
-                  .map((item) => (
-                    <span key={item.user_id}>{item.reaction}</span>
-                  ))}
-                {reactionFor === entry.id &&
-                  reactionOptions.map((reaction) => (
-                    <button
-                      key={reaction}
-                      className="reaction-button"
-                      onClick={() =>
-                        void action.run(async () => {
-                          if (ownReaction?.reaction === reaction)
-                            unwrap(
-                              await db
-                                .from('message_reactions')
-                                .delete()
-                                .match({ entry_id: entry.id, user_id: me.id }),
-                            )
-                          else if (ownReaction)
-                            unwrap(
-                              await db
-                                .from('message_reactions')
-                                .update({ reaction })
-                                .match({ entry_id: entry.id, user_id: me.id }),
-                            )
-                          else
-                            unwrap(
-                              await db.from('message_reactions').insert({
-                                entry_id: entry.id,
-                                user_id: me.id,
-                                reaction,
-                              }),
-                            )
-                          setReactions((current) => [
-                            ...current.filter(
-                              (item) =>
-                                item.entry_id !== entry.id ||
-                                item.user_id !== me.id,
-                            ),
-                            ...(ownReaction?.reaction === reaction
-                              ? []
-                              : [
-                                  {
-                                    entry_id: entry.id,
-                                    user_id: me.id,
-                                    reaction,
-                                  },
-                                ]),
-                          ])
-                          setReactionFor(undefined)
-                        })
-                      }
-                    >
-                      {reaction}
-                    </button>
-                  ))}
-              </div>
+              {picker}
             </article>
           )
         })}
@@ -559,9 +709,24 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
             )
         }}
       >
+        <ChatAttachments
+          userId={me.id}
+          onSent={async (id) => {
+            flushPush()
+            const entry = unwrap(
+              await db.from('chat_entries').select('*').eq('id', id).single(),
+            ) as Entry
+            stick.current = true
+            setEntries((current) =>
+              [...current.filter((item) => item.id !== id), entry].sort(
+                compare,
+              ),
+            )
+          }}
+        />
         <input
           aria-label="Message"
-          placeholder={'Message ' + (partner?.nickname ?? 'your partner') + '…'}
+          placeholder="Message…"
           maxLength={2000}
           value={text}
           disabled={Boolean(draft && !draft.failed)}

@@ -95,16 +95,7 @@ body {
 .request-main {
   padding-right: 16px;
 }
-.icon-grid button {
-  min-height: 44px;
-  overflow-wrap: anywhere;
-}
-.reactions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-}
+
 .msgrow {
   align-items: flex-start;
   flex-direction: column;
@@ -112,16 +103,7 @@ body {
 .msgrow.mine {
   align-items: flex-end;
 }
-.reaction-button {
-  background: transparent;
-  border: 0;
-  color: var(--muted);
-  border-radius: 9px;
-  min-width: 44px;
-  min-height: 44px;
-  display: grid;
-  place-items: center;
-}
+
 .bubble,
 .chat-request p,
 .date-card,

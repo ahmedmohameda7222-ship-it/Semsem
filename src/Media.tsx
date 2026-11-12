@@ -1,0 +1,457 @@
+import { useEffect, useRef, useState } from 'react'
+import { Camera, Mic, Square, X } from 'lucide-react'
+import { cropPhoto, db, unwrap } from './data'
+import { ErrorMessage, Field, Page, useAction } from './ui'
+
+type Bucket = 'our-space-chat-media' | 'our-space-memories'
+type MediaKind = 'photo' | 'audio'
+const audioTypes = ['audio/mp4', 'audio/webm', 'audio/ogg']
+
+async function upload(
+  bucket: Bucket,
+  userId: string,
+  id: string,
+  blob: Blob,
+  contentType: string,
+) {
+  const path = userId + '/' + id
+  const result = await db.storage
+    .from(bucket)
+    .upload(path, blob, { contentType })
+  if (
+    result.error &&
+    !['409', 'Duplicate'].includes(
+      String('statusCode' in result.error ? result.error.statusCode : ''),
+    )
+  )
+    throw result.error
+  return path
+}
+
+export function PrivateMedia({
+  bucket,
+  path,
+  kind,
+  alt,
+}: {
+  bucket: Bucket
+  path: string
+  kind: MediaKind
+  alt: string
+}) {
+  const [signed, setSigned] = useState<{ path: string; url: string }>()
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    let active = true
+    const refresh = async () => {
+      const { data, error } = await db.storage
+        .from(bucket)
+        .createSignedUrl(path, 900)
+      if (!active) return
+      if (data) setSigned({ path, url: data.signedUrl })
+      setFailed(Boolean(error))
+    }
+    void refresh()
+    const timer = setInterval(refresh, 720000)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [bucket, path])
+  if (!signed || signed.path !== path)
+    return (
+      <p className="hint">
+        {failed ? 'Attachment unavailable.' : 'Loading attachment…'}
+      </p>
+    )
+  return kind === 'audio' ? (
+    <audio
+      className="private-audio"
+      controls
+      preload="metadata"
+      src={signed.url}
+      aria-label={alt}
+    />
+  ) : (
+    <a
+      className="private-photo"
+      href={signed.url}
+      target="_blank"
+      rel="noreferrer"
+    >
+      <img src={signed.url} alt={alt} loading="lazy" />
+    </a>
+  )
+}
+
+type Draft = { blob: Blob; kind: MediaKind; contentType: string; id: string }
+export function ChatAttachments({
+  userId,
+  onSent,
+}: {
+  userId: string
+  onSent: (id: string) => Promise<void>
+}) {
+  const [draft, setDraft] = useState<Draft>()
+  const [preview, setPreview] = useState('')
+  const [recording, setRecording] = useState(false)
+  const [micError, setMicError] = useState('')
+  const [starting, setStarting] = useState(false)
+  const recorder = useRef<MediaRecorder | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const mounted = useRef(true)
+  const action = useAction()
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      clearTimeout(timer.current)
+      const current = recorder.current
+      if (current?.state === 'recording') current.stop()
+      current?.stream.getTracks().forEach((track) => track.stop())
+    }
+  }, [])
+  useEffect(() => {
+    if (!draft) return
+    const url = URL.createObjectURL(draft.blob)
+    setPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [draft])
+
+  async function record() {
+    setMicError('')
+    if (recorder.current?.state === 'recording') {
+      recorder.current.stop()
+      return
+    }
+    setStarting(true)
+    try {
+      if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia)
+        throw new Error('Recording is unavailable in this browser.')
+      const mimeType = audioTypes.find((type) =>
+        MediaRecorder.isTypeSupported(type),
+      )
+      if (!mimeType)
+        throw new Error('This browser does not support voice notes.')
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (!mounted.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
+      try {
+        const next = new MediaRecorder(stream, { mimeType })
+        recorder.current = next
+        const chunks: Blob[] = []
+        next.ondataavailable = (event) => {
+          if (event.data.size) chunks.push(event.data)
+        }
+        next.onstop = () => {
+          clearTimeout(timer.current)
+          stream.getTracks().forEach((track) => track.stop())
+          if (!mounted.current) return
+          setRecording(false)
+          const blob = new Blob(chunks, { type: mimeType })
+          if (blob.size && blob.size <= 8388608)
+            setDraft({
+              blob,
+              kind: 'audio',
+              contentType: mimeType,
+              id: crypto.randomUUID(),
+            })
+          else
+            setMicError(
+              'Could not save this recording. Try a shorter voice note.',
+            )
+        }
+        next.start()
+        setRecording(true)
+        timer.current = setTimeout(() => {
+          if (next.state === 'recording') next.stop()
+        }, 60000)
+      } catch (failure) {
+        stream.getTracks().forEach((track) => track.stop())
+        throw failure
+      }
+    } catch (failure) {
+      if (mounted.current)
+        setMicError(
+          failure instanceof DOMException
+            ? 'Allow microphone access to record a voice note.'
+            : (failure as Error).message,
+        )
+    } finally {
+      if (mounted.current) setStarting(false)
+    }
+  }
+
+  return (
+    <div className="chat-attachments">
+      <div className="row">
+        <label className="chat-action file-wrap" aria-label="Attach photo">
+          <Camera size={19} />
+          <input
+            aria-label="Attach photo"
+            type="file"
+            accept="image/*"
+            disabled={action.busy || recording || Boolean(draft)}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file)
+                void action.run(async () =>
+                  setDraft({
+                    blob: await cropPhoto(file),
+                    kind: 'photo',
+                    contentType: 'image/jpeg',
+                    id: crypto.randomUUID(),
+                  }),
+                )
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          className="chat-action"
+          aria-label={recording ? 'Stop recording' : 'Record voice note'}
+          disabled={starting || action.busy || Boolean(draft)}
+          onClick={() => void record()}
+        >
+          {recording ? <Square size={18} /> : <Mic size={19} />}
+        </button>
+        {recording && (
+          <span className="hint" role="status">
+            Recording…
+          </span>
+        )}
+      </div>
+      {draft && (
+        <div className="attachment-draft row">
+          {draft.kind === 'photo' ? (
+            <img src={preview} alt="Photo preview" />
+          ) : (
+            <audio controls src={preview} aria-label="Voice note preview" />
+          )}
+          <button
+            type="button"
+            className="outline"
+            disabled={action.busy}
+            onClick={() =>
+              void action.run(async () => {
+                const path = await upload(
+                  'our-space-chat-media',
+                  userId,
+                  draft.id,
+                  draft.blob,
+                  draft.contentType,
+                )
+                unwrap(
+                  await db.rpc('send_media', {
+                    entry: draft.id,
+                    kind: draft.kind,
+                    object_path: path,
+                  }),
+                )
+                setDraft(undefined)
+                await onSent(draft.id)
+              })
+            }
+          >
+            {action.busy ? 'Sending…' : 'Send'}
+          </button>
+          <button
+            type="button"
+            className="chat-action"
+            disabled={action.busy}
+            aria-label="Discard attachment"
+            onClick={() => {
+              void db.storage
+                .from('our-space-chat-media')
+                .remove([userId + '/' + draft.id])
+              setDraft(undefined)
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
+      <ErrorMessage value={micError || action.error} />
+    </div>
+  )
+}
+
+type Memory = {
+  id: string
+  photo_path: string
+  caption: string
+  author_id: string
+  created_at: string
+}
+export function Memories({ userId }: { userId: string }) {
+  const [items, setItems] = useState<Memory[]>([])
+  const [draft, setDraft] = useState<{ blob: Blob; id: string }>()
+  const [preview, setPreview] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [limit, setLimit] = useState(30)
+  const action = useAction()
+  useEffect(() => {
+    if (!draft) return
+    const url = URL.createObjectURL(draft.blob)
+    setPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [draft])
+  useEffect(() => {
+    let active = true
+    const refresh = async () => {
+      const { data, error } = await db
+        .from('memories')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(limit)
+      if (!active) return
+      if (data) setItems(data as Memory[])
+      setLoadError(error ? 'Could not load memories.' : '')
+    }
+    void refresh()
+    const channel = db
+      .channel('memories:' + crypto.randomUUID())
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'memories' },
+        refresh,
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void refresh()
+      })
+    return () => {
+      active = false
+      void db.removeChannel(channel)
+    }
+  }, [limit])
+  return (
+    <Page title="Our Memories" back="/world">
+      <label className="outline wide file-wrap">
+        <Camera size={19} /> Add a photo
+        <input
+          aria-label="Add a memory photo"
+          type="file"
+          accept="image/*"
+          disabled={action.busy || Boolean(draft)}
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (file)
+              void action.run(async () =>
+                setDraft({
+                  blob: await cropPhoto(file),
+                  id: crypto.randomUUID(),
+                }),
+              )
+          }}
+        />
+      </label>
+      {draft && (
+        <form
+          className="card mt16"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const caption = String(
+              new FormData(event.currentTarget).get('caption') ?? '',
+            ).trim()
+            void action.run(async () => {
+              const photo_path = await upload(
+                'our-space-memories',
+                userId,
+                draft.id,
+                draft.blob,
+                'image/jpeg',
+              )
+              const item = unwrap(
+                await db
+                  .from('memories')
+                  .insert({ photo_path, caption })
+                  .select()
+                  .single(),
+              ) as Memory
+              setItems((current) => [
+                item,
+                ...current.filter((row) => row.id !== item.id),
+              ])
+              setDraft(undefined)
+            })
+          }}
+        >
+          <img
+            className="memory-preview"
+            src={preview}
+            alt="Memory photo preview"
+          />
+          <Field label="Caption">
+            <textarea name="caption" maxLength={300} />
+          </Field>
+          <button className="primary" disabled={action.busy}>
+            Save memory
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            disabled={action.busy}
+            onClick={() => {
+              void db.storage
+                .from('our-space-memories')
+                .remove([userId + '/' + draft.id])
+              setDraft(undefined)
+            }}
+          >
+            Cancel
+          </button>
+        </form>
+      )}
+      <ErrorMessage value={action.error || loadError} />
+      {!items.length && !loadError && (
+        <p className="hint mt16">No memories yet.</p>
+      )}
+      <div className="memory-grid mt16">
+        {items.map((item) => (
+          <article className="card" key={item.id}>
+            <PrivateMedia
+              bucket="our-space-memories"
+              path={item.photo_path}
+              kind="photo"
+              alt={item.caption || 'Shared memory'}
+            />
+            {item.caption && <p>{item.caption}</p>}
+            <small className="hint">
+              {new Date(item.created_at).toLocaleDateString('en-GB')}
+            </small>
+            {item.author_id === userId && (
+              <button
+                className="ghost"
+                disabled={action.busy}
+                onClick={() => {
+                  if (!confirm('Remove this memory?')) return
+                  void action.run(async () => {
+                    unwrap(await db.from('memories').delete().eq('id', item.id))
+                    setItems((current) =>
+                      current.filter((row) => row.id !== item.id),
+                    )
+                    await db.storage
+                      .from('our-space-memories')
+                      .remove([item.photo_path])
+                  })
+                }}
+              >
+                Remove
+              </button>
+            )}
+          </article>
+        ))}
+      </div>
+      {items.length === limit && (
+        <button className="link-btn" onClick={() => setLimit(limit + 30)}>
+          More memories
+        </button>
+      )}
+    </Page>
+  )
+}

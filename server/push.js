@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import webpush from 'web-push'
+import { pushPayload } from './pushPayload.js'
 import { backend } from './supabase.js'
 
 export function allowedEndpoint(value) {
@@ -35,11 +36,7 @@ export async function deliverPush() {
           throw new Error('Unsupported push endpoint')
         await webpush.sendNotification(
           { endpoint: job.endpoint, keys: job.keys },
-          JSON.stringify({
-            entry: job.event_id,
-            title: 'Our Space',
-            body: job.title ? job.body : 'You have a new message.',
-          }),
+          JSON.stringify(pushPayload(job)),
           {
             TTL: 3600,
             topic: job.event_id.replaceAll('-', ''),

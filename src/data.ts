@@ -29,6 +29,8 @@ export type Template = {
   favorite: boolean
 }
 export type Entry = {
+  media_kind?: 'photo' | 'audio' | null
+  media_path?: string | null
   id: string
   sender_id: string
   recipient_id: string

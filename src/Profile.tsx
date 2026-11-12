@@ -3,7 +3,6 @@ import {
   Bell,
   Check,
   ChevronRight,
-  Download,
   Heart,
   LogOut,
   Palette,
@@ -72,12 +71,6 @@ export function ProfilePage({
         caption="Chat and love requests"
         icon={<Bell />}
         action={() => navigate('/settings/notifications')}
-      />
-      <Setting
-        title="Install Our Space"
-        caption="Add to your iPhone Home Screen"
-        icon={<Download />}
-        action={() => navigate('/settings/install')}
       />
       <label className="checkboxline mt16">
         <input
@@ -270,7 +263,7 @@ export function Install() {
   )
 }
 
-export function Notifications({ partner }: { partner?: Profile }) {
+export function Notifications() {
   const navigate = useNavigate()
   const action = useAction()
   const [enabled, setEnabled] = useState(false)
@@ -372,13 +365,6 @@ export function Notifications({ partner }: { partner?: Profile }) {
           <p className="hint mt8">This browser does not support Web Push.</p>
         )}
         <ErrorMessage value={action.error} />
-      </div>
-      <div className="card mt16">
-        <strong>What you’ll be notified about</strong>
-        <p className="page-sub">
-          New chat messages and attention requests from{' '}
-          {partner?.nickname ?? 'your partner'}.
-        </p>
       </div>
     </Page>
   )

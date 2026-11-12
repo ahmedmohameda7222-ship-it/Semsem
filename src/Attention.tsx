@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Heart,
   HeartHandshake,
@@ -147,6 +147,24 @@ const glyphs = {
   Plane,
 }
 
+const shortLabels: Record<string, string> = {
+  Heart: 'Heart',
+  HeartHandshake: 'Hug',
+  Sparkles: 'Attention',
+  Star: 'Compliment',
+  Gift: 'Surprise',
+  Flower2: 'Flowers',
+  kiss: 'Kiss',
+  BedDouble: 'Cuddles',
+  Baby: 'Baby',
+  Hand: 'Hold hands',
+  Umbrella: 'Comfort',
+  Video: 'Video call',
+  Bell: 'Reminder',
+  Megaphone: 'Tell me',
+  IceCreamCone: 'Ice cream',
+}
+
 export function LoveIcon({ icon, size = '' }: { icon: string; size?: string }) {
   if (icon === 'kiss')
     return (
@@ -173,6 +191,11 @@ export function Home({
 }) {
   const navigate = useNavigate()
   const [notice, setNotice] = useState('')
+  useEffect(() => {
+    if (!notice) return
+    const timer = setTimeout(() => setNotice(''), 3200)
+    return () => clearTimeout(timer)
+  }, [notice])
   const [pending, setPending] = useState<{
     button: string
     entry: string
@@ -202,11 +225,7 @@ export function Home({
         unwrap(await db.rpc('send_chat', { entry, button }))
         flushPush()
         setPending(undefined)
-        setNotice(
-          'Sent to ' +
-            (partner?.nickname ?? 'your partner') +
-            ' · See it in Chat ♡',
-        )
+        setNotice('Sent to ' + (partner?.nickname ?? 'your partner') + ' ❤️')
       } catch (failure) {
         setPending({ button, entry, failed: true })
         throw failure
@@ -284,18 +303,25 @@ export function Home({
           </div>
         ))}
       </div>
-      {notice && (
-        <p className="hint mt8" role="status">
-          {notice}
-        </p>
+      {(pending || notice) && (
+        <div className={'send-toast' + (!pending && notice ? ' success' : '')}>
+          <span role={pending?.failed ? 'alert' : 'status'}>
+            {pending?.failed
+              ? 'Could not send the request.'
+              : pending
+                ? 'Sending…'
+                : notice}
+          </span>
+          {pending?.failed && (
+            <button
+              className="link-btn"
+              onClick={() => void send(pending.button, pending.entry)}
+            >
+              Retry
+            </button>
+          )}
+        </div>
       )}
-      <ErrorMessage value={action.error} />
-      <button
-        className="outline wide mt16"
-        onClick={() => navigate('/buttons/new')}
-      >
-        <Plus className="icon" /> Create your own button
-      </button>
       <div className="sect">
         <h3>Our next special day</h3>
         <button className="link-btn" onClick={() => navigate('/dates')}>
@@ -421,14 +447,16 @@ export function ButtonEditor({
           {visible.map(([key, label]) => (
             <button
               type="button"
-              className={icon === key ? 'active' : ''}
+              className={icon === key ? 'icon-option active' : 'icon-option'}
               aria-pressed={icon === key}
               aria-label={label}
               key={key}
               onClick={() => setIcon(key)}
             >
               <LoveIcon icon={key} />
-              <span>{label.split(' ').slice(0, 2).join(' ')}</span>
+              <span>
+                {shortLabels[key] ?? label.split(' ').slice(0, 2).join(' ')}
+              </span>
             </button>
           ))}
         </div>

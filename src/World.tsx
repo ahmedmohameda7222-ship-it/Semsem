@@ -58,7 +58,7 @@ export function World({ me }: { me: Profile }) {
           [
             'memories',
             'Our Memories',
-            'A future gallery for favorite moments',
+            'A private gallery for favorite moments',
             Camera,
           ],
         ] as const
@@ -405,17 +405,6 @@ export function NoteEditor({ reload }: { reload: () => Promise<void> }) {
         </button>
         <ErrorMessage value={action.error} />
       </form>
-    </Page>
-  )
-}
-
-export function Memories() {
-  return (
-    <Page title="Our Memories" back="/world">
-      <div className="empty-state mt28">
-        <Camera className="icon big" />
-        <strong>Our gallery is coming soon.</strong>
-      </div>
     </Page>
   )
 }
