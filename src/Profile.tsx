@@ -286,6 +286,17 @@ export function Notifications() {
   return (
     <Page title="Notifications" back="/profile">
       <p className="page-sub">Never miss a little love note.</p>
+      {location.hostname !== 'sasa-semsem.vercel.app' &&
+        location.hostname !== '127.0.0.1' &&
+        location.hostname !== 'localhost' && (
+          <div className="card mt16" role="alert">
+            This installation uses an older web address. iPhone push subscriptions
+            are tied to that specific address. Open
+            {' '}<a href="https://sasa-semsem.vercel.app">sasa-semsem.vercel.app</a>{' '}
+            in Safari, add it to your Home Screen, and enable notifications
+            inside the new installation.
+          </div>
+        )}
       <div className="card mt22">
         <div className="row">
           <Bell className="icon big" />
