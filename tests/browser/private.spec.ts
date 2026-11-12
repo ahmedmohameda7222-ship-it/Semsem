@@ -186,6 +186,16 @@ test.beforeEach(async ({ page }) => {
                 body: 'A little love for your day 🫶',
                 created_at: '2026-01-02T09:58:00Z',
               },
+              {
+                ...current,
+                id: 'e6194cd2-41b9-473a-9fe1-e1453a7a9cea',
+                sender_id: first,
+                recipient_id: second,
+                title: null,
+                body: 'Our little hello',
+                created_at: '2026-01-02T09:57:00Z',
+                read_at: '2026-01-02T09:58:00Z',
+              },
             ],
       })
     }
@@ -204,7 +214,7 @@ test('signed-in screens, themes, search and future child form', async ({
   await expect(nav.getByRole('button')).toHaveCount(4)
   await nav.getByRole('button', { name: 'Chat' }).click()
   await expect(page.getByText('I need a hug')).toBeVisible()
-  await expect(page.getByText('Seen', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Seen').first()).toBeVisible()
   await page.screenshot({ path: info.outputPath('chat.png') })
   await expect(nav).toHaveCount(0)
   await page.getByRole('button', { name: 'Back to Home' }).click()
@@ -500,6 +510,8 @@ test('Attention Request allows a direct written reply', async ({ page }) => {
   await request.getByRole('button', { name: 'Reply to request' }).click()
   await request.getByRole('textbox', { name: 'Write a reply' }).fill('Of course, my love ❤️')
   await expect(request.getByRole('button', { name: 'Send request reply' })).toBeEnabled()
+  await request.getByRole('button', { name: 'Send request reply' }).click()
+  await expect(request.getByText('Replied: Of course, my love ❤️')).toBeVisible()
 })
 
 test('current mood can be selected without affecting saved love buttons', async ({ page }) => {
@@ -509,6 +521,8 @@ test('current mood can be selected without affecting saved love buttons', async 
   await expect(page.getByRole('button', { name: 'Happy' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Missing you' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Sad' })).toBeVisible()
+  await page.getByRole('button', { name: 'Happy' }).click()
+  await expect(page.getByText(/Your mood was shared with/)).toBeVisible()
 })
 
 test('notification settings explain diagnostic delivery on this device', async ({ page }) => {
