@@ -245,18 +245,8 @@ export function Home({
         ,<br />
         {me.nickname} <span className="accent">♡</span>
       </h1>
-      <p className="page-sub">Your favorite person is just one tap away.</p>
       <div className="hero">
-        <div className="eyebrow">Just for us two</div>
-        <h2>
-          Little requests.
-          <br />
-          Lots of love.
-        </h2>
-        <p>
-          Tap a feeling and send it straight to{' '}
-          {partner?.nickname ?? 'your partner'}.
-        </p>
+        <h2>I love You Mi Amor</h2>
       </div>
       <div className="sect">
         <h3>Your love buttons</h3>

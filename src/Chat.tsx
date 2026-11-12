@@ -30,6 +30,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
   const [loadError, setLoadError] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [text, setText] = useState('')
+  const [voiceActive, setVoiceActive] = useState(false)
   const [typing, setTyping] = useState(false)
   const [draft, setDraft] = useState<{
     id: string
@@ -700,7 +701,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
       )}
       <ErrorMessage value={action.error} />
       <form
-        className="compose"
+        className={'compose' + (voiceActive ? ' voice-active' : '')}
         onSubmit={(event) => {
           event.preventDefault()
           if (text.trim() && !action.busy)
@@ -712,6 +713,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
       >
         <ChatAttachments
           userId={me.id}
+          onVoiceModeChange={setVoiceActive}
           onSent={async (id) => {
             flushPush()
             const entry = unwrap(
@@ -725,6 +727,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
             )
           }}
         />
+        {!voiceActive && (
         <input
           aria-label="Message"
           placeholder="Message…"
@@ -745,6 +748,8 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
             } else void channel.untrack()
           }}
         />
+        )}
+        {!voiceActive && (
         <button
           className="send"
           aria-label="Send message"
@@ -752,6 +757,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
         >
           <Send className="icon" />
         </button>
+        )}
       </form>
     </section>
   )

@@ -644,3 +644,108 @@
   .call-wave-rings span { animation: none; }
 }
 .call-screen.no-motion .call-wave-rings span { animation: none; }
+
+/* The recording interface takes over the chat composer instead of floating above it. */
+.compose.voice-active {
+  min-width: 0;
+  width: 100%;
+  gap: 0;
+}
+.compose.voice-active > .chat-attachments.voice-mode {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.voice-composer {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  gap: 5px;
+  align-items: center;
+  padding: 4px 5px;
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.voice-composer-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.voice-composer button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  min-width: 40px;
+  min-height: 44px;
+  width: 40px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+}
+.voice-composer .voice-delete {
+  background: transparent;
+  color: var(--primary);
+}
+.voice-composer .voice-pause {
+  background: var(--subtle);
+  color: var(--primary);
+}
+.voice-composer .voice-send {
+  background: var(--primary);
+  color: var(--on);
+}
+.voice-composer .voice-live {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 5px;
+}
+.voice-composer .voice-recording-status {
+  position: static;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+  padding: 0;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.voice-composer .voice-recording-waveform {
+  min-width: 0;
+  flex: 1 1 auto;
+  width: auto;
+  height: 28px;
+}
+.voice-composer .voice-draft {
+  min-width: 0;
+}
+.voice-composer .voice-draft .voice-message {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.voice-composer .voice-draft .voice-message-inner {
+  gap: 4px;
+}
+.voice-composer .voice-draft .voice-toggle {
+  flex-basis: 36px;
+  width: 36px;
+  min-width: 36px;
+}
+.voice-composer .voice-draft .voice-bars {
+  gap: 1px;
+}
+.voice-composer .voice-draft .voice-times {
+  font-size: 10px;
+}
+@media (max-width: 350px) {
+  .voice-composer { gap: 3px; padding-inline: 3px; }
+  .voice-composer button { flex-basis: 36px; min-width: 36px; width: 36px; }
+}
