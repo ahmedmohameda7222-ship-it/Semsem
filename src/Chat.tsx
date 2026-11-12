@@ -42,6 +42,11 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [favoriteRevision, setFavoriteRevision] = useState(0)
   const [highlight, setHighlight] = useState<string>()
+  const [replyingTo, setReplyingTo] = useState<string>()
+  const [replyText, setReplyText] = useState('')
+  const [replyError, setReplyError] = useState('')
+  const [replyBusy, setReplyBusy] = useState(false)
+  const replyIds = useRef(new Map<string, string>())
 
   useEffect(() => {
     const viewport = window.visualViewport
@@ -285,11 +290,19 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
       const unseen = entries
         .filter((entry) => entry.recipient_id === me.id && !entry.read_at)
         .map((entry) => entry.id)
-      if (unseen.length) void db.rpc('read_chat', { entries: unseen })
+      if (unseen.length) {
+        void db.rpc('read_chat', { entries: unseen }).catch(() => {})
+      }
     }
     mark()
     document.addEventListener('visibilitychange', mark)
-    return () => document.removeEventListener('visibilitychange', mark)
+    window.addEventListener('focus', mark)
+    const retry = setInterval(mark, 7000)
+    return () => {
+      document.removeEventListener('visibilitychange', mark)
+      window.removeEventListener('focus', mark)
+      clearInterval(retry)
+    }
   }, [entries, me.id])
 
   useLayoutEffect(() => {
@@ -349,6 +362,36 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
       )
       setMore(rows.length === pageSize)
     })
+  }
+
+  async function replyToRequest(entry: Entry) {
+    const content = replyText.trim()
+    if (!content || content.length > 500 || replyBusy) return
+    const retryId = replyIds.current.get(entry.id) ?? crypto.randomUUID()
+    replyIds.current.set(entry.id, retryId)
+    setReplyBusy(true)
+    setReplyError('')
+    try {
+      unwrap(await db.rpc('respond', {
+        entry: entry.id,
+        reply: content,
+        reply_id: retryId,
+      }))
+      setEntries((current) => current.map((item) =>
+        item.id === entry.id ? {
+          ...item, read_at: item.read_at ?? new Date().toISOString(),
+          responded_at: new Date().toISOString(), reply_text: content,
+        } : item,
+      ))
+      setReplyingTo(undefined)
+      setReplyText('')
+      replyIds.current.delete(entry.id)
+      flushPush()
+    } catch {
+      setReplyError('Could not send your reply. Try again.')
+    } finally {
+      setReplyBusy(false)
+    }
   }
 
   async function send(id: string, body: string) {
@@ -638,11 +681,49 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
                       </div>
                       <h4>{entry.title}</h4>
                     </div>
-                    {(entry.responded_at || entry.read_at) && (
-                      <span className="request-status">Seen</span>
+                    {mine && entry.read_at && (
+                      <span className="request-status">✓✓ Seen</span>
                     )}
                   </div>
                   <p>{entry.body}</p>
+                  {entry.reply_text && (
+                    <p className="request-reply-saved">
+                      <span aria-hidden="true">↪</span> Replied: {entry.reply_text}
+                    </p>
+                  )}
+                  {!mine && !entry.responded_at && (
+                    <div className="request-reply">
+                      {replyingTo === entry.id ? (
+                        <form onSubmit={(event) => {
+                          event.preventDefault()
+                          void replyToRequest(entry)
+                        }}>
+                          <textarea aria-label="Write a reply"
+                            placeholder="Write a sweet reply…" rows={2}
+                            maxLength={500} value={replyText}
+                            onChange={(event) => setReplyText(event.target.value)} />
+                          <div className="row">
+                            <button className="outline" type="button"
+                              onClick={() => { setReplyingTo(undefined); setReplyError('') }}>
+                              Cancel
+                            </button>
+                            <button className="primary" type="submit"
+                              disabled={!replyText.trim() || replyBusy}
+                              aria-label="Send request reply">
+                              <Send size={16} /> {replyBusy ? 'Sending…' : 'Send reply'}
+                            </button>
+                          </div>
+                          {replyError && <p role="alert">{replyError}</p>}
+                        </form>
+                      ) : (
+                        <button type="button" className="outline request-reply-open"
+                          aria-label="Reply to request"
+                          onClick={() => { setReplyingTo(entry.id); setReplyText(''); setReplyError('') }}>
+                          Reply to request
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div className="chat-entry-footer">
                     <div className="mini">{time(entry.created_at)}</div>
                     {controls}
@@ -656,7 +737,13 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
                       path={entry.media_path}
                       kind={entry.media_kind}
                       alt={entry.body}
+                      duration={entry.duration_seconds}
                     />
+                  )}
+                  {entry.in_reply_to && (
+                    <div className="reply-context">
+                      ↪ Reply to {entries.find((item) => item.id === entry.in_reply_to)?.title ?? 'Attention Request'}
+                    </div>
                   )}
                   {(!entry.media_kind ||
                     !['Photo', 'Voice message'].includes(entry.body)) &&
@@ -664,7 +751,12 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
                   <div className="chat-entry-footer">
                     <div className="time">
                       {time(entry.created_at)}
-                      {mine && (entry.read_at ? ' · Read' : ' · Sent')}
+                      {mine && (
+                        <span className={'chat-delivery ' + (entry.read_at ? 'is-seen' : '')}
+                          aria-label={entry.read_at ? 'Seen' : 'Sent'}>
+                          {entry.read_at ? ' · ✓✓ Seen' : ' · ✓ Sent'}
+                        </span>
+                      )}
                     </div>
                     {controls}
                   </div>
