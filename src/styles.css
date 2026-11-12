@@ -1,0 +1,192 @@
+:root {
+  --line: color-mix(in srgb, var(--primary) 19%, var(--surface));
+  --muted: color-mix(in srgb, var(--ink) 72%, var(--surface));
+  --subtle: color-mix(in srgb, var(--soft) 26%, var(--surface));
+  --button-ink: #fff;
+  --button-bg: var(--primary);
+}
+:root[data-theme='night'] {
+  --button-ink: #1d1822;
+  --line: color-mix(in srgb, var(--ink) 22%, var(--surface));
+}
+:root[data-theme='night'] .hero {
+  background: linear-gradient(125deg, #84243f, #68364f);
+}
+body {
+  background: var(--bg);
+}
+.app-shell {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin-inline: auto;
+  max-width: 480px;
+  height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+}
+.screen {
+  padding-top: max(22px, env(safe-area-inset-top));
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+.screen.auth,
+.screen.no-bottom {
+  padding-bottom: max(28px, env(safe-area-inset-bottom));
+}
+.screen.chat-screen {
+  padding-top: max(22px, env(safe-area-inset-top));
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+.bottom {
+  padding-bottom: max(9px, env(safe-area-inset-bottom));
+}
+.primary,
+.compose .send,
+.mine .bubble {
+  color: var(--button-ink);
+  background-color: var(--button-bg);
+}
+.accent {
+  color: var(--primary);
+}
+.center {
+  text-align: center;
+}
+.back,
+.link-btn,
+.ghost,
+.icon-btn {
+  min-height: 44px;
+}
+.back {
+  padding-bottom: 6px;
+  margin-bottom: 3px;
+}
+.avatar-button {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+.otp-card {
+  background: var(--subtle);
+  border-radius: 22px;
+  padding: 20px;
+}
+.field-label {
+  font-size: 12px;
+  font-weight: 750;
+}
+.error {
+  color: var(--primary);
+}
+.request-edit {
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  top: 2px;
+  right: 0;
+}
+.request-main {
+  padding-right: 16px;
+}
+.icon-grid button {
+  min-height: 44px;
+  overflow-wrap: anywhere;
+}
+.reactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.msgrow {
+  align-items: flex-start;
+  flex-direction: column;
+}
+.msgrow.mine {
+  align-items: flex-end;
+}
+.reaction-button {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  border-radius: 9px;
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+}
+.bubble,
+.chat-request p,
+.date-card,
+.setting-row,
+.child-node,
+.request-main,
+.person-node,
+.jar-note {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.focused-entry {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  border-radius: 16px;
+}
+.offline {
+  position: absolute;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 10px;
+  text-align: center;
+  background: var(--subtle);
+  font-size: 11px;
+}
+.celebrate-word {
+  top: calc(42px + env(safe-area-inset-top));
+}
+.floatbit {
+  color: var(--primary);
+}
+.date-photo {
+  max-width: 100%;
+  width: 160px;
+  border-radius: 12px;
+}
+.jar-icon {
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+}
+.jar-note {
+  animation: floatIn 0.35s ease-out;
+}
+.retry {
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  min-height: 44px;
+}
+.live-mini .primary {
+  display: inline-flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+:root[data-theme='night'] .time {
+  color: inherit;
+}
+@media (max-width: 360px) {
+  .screen {
+    padding-inline: 17px;
+  }
+}
