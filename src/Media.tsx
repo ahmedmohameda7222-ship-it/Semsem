@@ -43,7 +43,29 @@ export function PrivateMedia({
 }) {
   const [signed, setSigned] = useState<{ path: string; url: string }>()
   const [failed, setFailed] = useState(false)
+  const [visible, setVisible] = useState(false)
+  const lazyTarget = useRef<HTMLSpanElement>(null)
   useEffect(() => {
+    const target = lazyTarget.current
+    if (!target) return
+    if (!('IntersectionObserver' in window)) {
+      setVisible(true)
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((item) => item.isIntersecting)) {
+          setVisible(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '350px' },
+    )
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [path])
+  useEffect(() => {
+    if (!visible) return
     let active = true
     const refresh = async () => {
       const { data, error } = await db.storage
@@ -59,7 +81,9 @@ export function PrivateMedia({
       active = false
       clearInterval(timer)
     }
-  }, [bucket, path])
+  }, [bucket, path, visible])
+  if (!visible)
+    return <span ref={lazyTarget} className="hint private-media-placeholder">Attachment ready to load</span>
   if (!signed || signed.path !== path)
     return (
       <p className="hint">
