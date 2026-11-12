@@ -9,6 +9,8 @@ for (const width of [320, 375, 390, 430]) {
       await expect(
         page.getByRole('heading', { name: 'Our Space.' }),
       ).toBeVisible()
+      await expect(page.getByText('Every sweet request, every little memory', { exact: false })).toHaveCount(0)
+      await expect(page.locator('.auth-foot')).toHaveText('Made just for Us ♡')
       await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
         .toBe(width)
