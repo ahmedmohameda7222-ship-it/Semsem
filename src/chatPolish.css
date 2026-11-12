@@ -503,3 +503,144 @@
     font-size: 9px;
   }
 }
+
+
+/* Audio messages: accessible compact waveform, no eager audio download. */
+.voice-message {
+  box-sizing: border-box;
+  width: min(100%, 350px);
+  min-width: 0;
+  max-width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.voice-message-inner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.voice-toggle {
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--subtle);
+  color: var(--primary);
+}
+.voice-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.voice-bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  overflow: hidden;
+}
+.voice-bar {
+  flex: 1 1 0;
+  min-width: 1px;
+  border-radius: 12px;
+  background: var(--line);
+  transition: background-color 0.1s ease;
+}
+.voice-bar.played {
+  background: var(--primary);
+}
+.voice-scrubber {
+  position: absolute;
+  inset: 0 0 auto;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  touch-action: pan-x;
+}
+.voice-scrubber:focus-visible + .voice-times,
+.voice-message:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.voice-times {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.voice-hidden-audio {
+  display: none;
+}
+.voice-native-fallback {
+  display: block;
+  width: 100%;
+}
+.attachment-draft .voice-message {
+  flex: 1 1 195px;
+  min-width: 175px;
+}
+.chat-attachments .voice-recording-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  max-width: min(86vw, 300px);
+}
+.voice-recording-waveform {
+  display: block;
+  width: min(29vw, 110px);
+  height: 26px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-bar { transition: none; }
+}
+
+/* Ring animation is contained around the avatar, avoiding layout shift. */
+.call-avatar-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  isolation: isolate;
+}
+.call-avatar-wrap .avatar {
+  position: relative;
+  z-index: 2;
+}
+.call-wave-rings {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.call-wave-rings span {
+  position: absolute;
+  inset: 14px;
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  opacity: 0;
+  animation: outgoing-ring 2.25s ease-out infinite;
+}
+.call-wave-rings span:nth-child(2) { animation-delay: 0.7s; }
+.call-wave-rings span:nth-child(3) { animation-delay: 1.4s; }
+@keyframes outgoing-ring {
+  0% { opacity: 0.48; transform: scale(0.9); }
+  95%, 100% { opacity: 0; transform: scale(1.55); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-wave-rings span { animation: none; }
+}
+.call-screen.no-motion .call-wave-rings span { animation: none; }
