@@ -267,6 +267,7 @@ export function Notifications() {
   const navigate = useNavigate()
   const action = useAction()
   const [enabled, setEnabled] = useState(false)
+  const [testResult, setTestResult] = useState('')
   const supported =
     'Notification' in window &&
     'PushManager' in window &&
@@ -285,6 +286,17 @@ export function Notifications() {
   return (
     <Page title="Notifications" back="/profile">
       <p className="page-sub">Never miss a little love note.</p>
+      {location.hostname !== 'sasa-semsem.vercel.app' &&
+        location.hostname !== '127.0.0.1' &&
+        location.hostname !== 'localhost' && (
+          <div className="card mt16" role="alert">
+            This installation uses an older web address. iPhone push subscriptions
+            are tied to that specific address. Open
+            {' '}<a href="https://sasa-semsem.vercel.app">sasa-semsem.vercel.app</a>{' '}
+            in Safari, add it to your Home Screen, and enable notifications
+            inside the new installation.
+          </div>
+        )}
       <div className="card mt22">
         <div className="row">
           <Bell className="icon big" />
@@ -364,6 +376,22 @@ export function Notifications() {
         {!supported && (!ios || standalone) && (
           <p className="hint mt8">This browser does not support Web Push.</p>
         )}
+        <div className="notification-diagnostics">
+          <button className="outline wide" type="button"
+            aria-label="Send test notification"
+            disabled={!enabled || action.busy}
+            onClick={() => void action.run(async () => {
+              setTestResult('')
+              const result = await push('test') as { accepted?: number, devices?: number } | null
+              setTestResult(result?.accepted
+                ? 'Push service accepted the test for ' + result.accepted + ' device(s). Check your iPhone Notification Center.'
+                : 'No push service accepted the test. Disable notifications, re-enable them, then try again.')
+            })}>
+            <Bell size={17} /> Send test notification
+          </button>
+          <p className="hint mt8">Delivery to the push service does not guarantee your iPhone displayed the alert. Check iPhone Settings → Notifications → Our Space, Focus modes, and Show Previews.</p>
+          {testResult && <p className="hint" role="status">{testResult}</p>}
+        </div>
         <ErrorMessage value={action.error} />
       </div>
     </Page>
