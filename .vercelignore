@@ -1,0 +1,5 @@
+.env*
+dist/
+playwright-report/
+test-results/
+supabase/.temp/
