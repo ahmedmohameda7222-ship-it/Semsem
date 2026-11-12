@@ -19,7 +19,7 @@ concurrency:
 jobs:
   quality-and-browser:
     name: Lint, tests, build and mobile browser checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Check out source
