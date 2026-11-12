@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Camera, Mic, Square, X } from 'lucide-react'
 import { cropPhoto, db, unwrap } from './data'
 import { formatElapsed } from './elapsed'
+import { RecordingWaveform, VoiceWaveform } from './VoiceWaveform'
 import { ErrorMessage, Field, Page, useAction } from './ui'
 
 type Bucket = 'our-space-chat-media' | 'our-space-memories'
@@ -66,13 +67,7 @@ export function PrivateMedia({
       </p>
     )
   return kind === 'audio' ? (
-    <audio
-      className="private-audio"
-      controls
-      preload="metadata"
-      src={signed.url}
-      aria-label={alt}
-    />
+    <VoiceWaveform src={signed.url} label={alt} />
   ) : (
     <a
       className="private-photo"
@@ -102,6 +97,7 @@ export function ChatAttachments({
   const [draft, setDraft] = useState<Draft>()
   const [preview, setPreview] = useState('')
   const [recording, setRecording] = useState(false)
+  const [liveStream, setLiveStream] = useState<MediaStream>()
   const [recordedSeconds, setRecordedSeconds] = useState(0)
   const startedAt = useRef(0)
   useEffect(() => {
@@ -170,6 +166,7 @@ export function ChatAttachments({
           stream.getTracks().forEach((track) => track.stop())
           if (!mounted.current) return
           setRecording(false)
+          setLiveStream(undefined)
           setRecordedSeconds(0)
           const duration = (performance.now() - startedAt.current) / 1000
           const blob = new Blob(chunks, { type: mimeType })
@@ -192,6 +189,7 @@ export function ChatAttachments({
         next.start()
         startedAt.current = performance.now()
         setRecordedSeconds(0)
+        setLiveStream(stream)
         setRecording(true)
         timer.current = setTimeout(() => {
           if (next.state === 'recording') next.stop()
@@ -247,9 +245,10 @@ export function ChatAttachments({
           {recording ? <Square size={18} /> : <Mic size={19} />}
         </button>
         {recording && (
-          <span className="hint" role="status">
+          <span className="hint voice-recording-status" role="status">
             <span className="recording-dot" aria-hidden /> Recording{' '}
             <time>{formatElapsed(recordedSeconds)}</time>
+            {liveStream && <RecordingWaveform stream={liveStream} />}
           </span>
         )}
       </div>
@@ -259,8 +258,7 @@ export function ChatAttachments({
             <img src={preview} alt="Photo preview" />
           ) : (
             <>
-              <audio controls src={preview} aria-label="Voice note preview" />
-              <time>{formatElapsed(draft.duration ?? 0)}</time>
+              <VoiceWaveform src={preview} label="Voice note preview" durationHint={draft.duration} />
             </>
           )}
           <button
