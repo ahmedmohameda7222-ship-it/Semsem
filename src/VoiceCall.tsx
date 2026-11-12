@@ -6,6 +6,7 @@ import { db, unwrap } from './data'
 import type { Profile } from './data'
 import { formatElapsed } from './elapsed'
 import { Avatar } from './ui'
+import { turnStatusMessage } from './callNetwork'
 
 type Invite = {
   id: string
@@ -42,7 +43,7 @@ async function requestVoice(action: 'ice' | 'notify', call?: string) {
   if (!response.ok)
     throw new Error('The call service is temporarily unavailable.')
   if (action === 'ice')
-    return (await response.json()) as { iceServers: RTCIceServer[]; relay: boolean }
+    return (await response.json()) as { iceServers: RTCIceServer[]; relay: boolean; turnStatus?: string }
   return { iceServers: [], relay: false }
 }
 
@@ -98,6 +99,7 @@ export function VoiceCallProvider({
   const [seconds, setSeconds] = useState(0)
   const [playbackBlocked, setPlaybackBlocked] = useState(false)
   const [relayAvailable, setRelayAvailable] = useState<boolean | null>(null)
+  const [turnStatus, setTurnStatus] = useState<string | null>(null)
   const [networkStatus, setNetworkStatus] = useState('')
   const [audioRoute, setAudioRoute] = useState('')
 
@@ -136,6 +138,7 @@ export function VoiceCallProvider({
     setMuted(false)
     setPlaybackBlocked(false)
     setRelayAvailable(null)
+    setTurnStatus(null)
     setNetworkStatus('')
     setAudioRoute('')
     show(undefined)
@@ -187,9 +190,10 @@ export function VoiceCallProvider({
       return
     }
     microphone.current = stream
-    const { iceServers, relay } = await requestVoice('ice')
+    const { iceServers, relay, turnStatus: providerStatus } = await requestVoice('ice')
     if (active.current?.id !== id) return
     setRelayAvailable(relay)
+    setTurnStatus(providerStatus ?? null)
     setNetworkStatus(relay ? 'Secure relay ready' : 'Direct network connection only')
     const connection = new RTCPeerConnection({ iceServers, iceTransportPolicy: 'all' })
     peer.current = connection
@@ -627,7 +631,12 @@ export function VoiceCallProvider({
             {call?.state === 'connecting' && (
               <p className="hint call-network-status" role="status">
                 {networkStatus || 'Checking secure audio route…'}
-                {relayAvailable === false && ' · TURN relay unavailable'}
+
+              </p>
+            )}
+            {call?.state === 'connecting' && relayAvailable === false && (
+              <p className="hint call-turn-diagnostic" role="status">
+                {turnStatusMessage(turnStatus)}
               </p>
             )}
             {audioRoute && <p className="hint" role="status">{audioRoute}</p>}

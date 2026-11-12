@@ -35,7 +35,10 @@ export default async function handler(req, res) {
         if (error) throw error
         if (!allowed) return res.status(429).end()
       }
-      return res.json(await iceConfiguration({ key, secret }))
+      const ice = await iceConfiguration({ key, secret })
+      if (!ice.relay)
+        console.warn('[voice] Cloudflare TURN unavailable:', ice.turnStatus)
+      return res.json(ice)
     }
     if (
       action !== 'notify' ||
