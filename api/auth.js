@@ -4,11 +4,10 @@ import { backend, post } from '../server/supabase.js'
 export default async function handler(req, res) {
   try {
     if (!post(req, res)) return
-    const { profile, action, code } = req.body ?? {}
-    if (
-      !['sasa', 'semsem'].includes(profile) ||
-      !['request', 'verify'].includes(action)
-    ) {
+    const { profile, action, code, password } = req.body ?? {}
+    const otpEnabled = process.env.OUR_SPACE_AUTH_MODE === 'otp'
+    const actions = otpEnabled ? ['request', 'verify'] : ['password']
+    if (!['sasa', 'semsem'].includes(profile) || !actions.includes(action)) {
       return res.status(400).json({ error: 'Choose a profile to continue.' })
     }
     if (
@@ -16,6 +15,14 @@ export default async function handler(req, res) {
       (typeof code !== 'string' || !/^\d{6}$/.test(code))
     ) {
       return res.status(400).json({ error: 'Enter the six-digit code.' })
+    }
+    if (
+      action === 'password' &&
+      (typeof password !== 'string' ||
+        password.length === 0 ||
+        password.length > 4096)
+    ) {
+      return res.status(400).json({ error: 'Enter your account password.' })
     }
     const db = backend()
     const ip =
@@ -26,12 +33,12 @@ export default async function handler(req, res) {
     const buckets = [
       {
         bucket_key: action + ':ip:' + ipHash,
-        max_hits: action === 'verify' ? 20 : 6,
+        max_hits: action === 'password' ? 12 : action === 'verify' ? 20 : 6,
         window_seconds: 900,
       },
       {
         bucket_key: action + ':profile:' + profile,
-        max_hits: action === 'verify' ? 30 : 5,
+        max_hits: action === 'password' ? 18 : action === 'verify' ? 30 : 5,
         window_seconds: 900,
       },
     ]
@@ -55,7 +62,11 @@ export default async function handler(req, res) {
         .json({ error: 'Sign-in is temporarily unavailable.' })
     const { data: account, error: accountError } =
       await db.auth.admin.getUserById(profileRow.id)
-    if (accountError || !account.user.email || !account.user.email_confirmed_at)
+    if (
+      accountError ||
+      !account?.user?.email ||
+      !account.user.email_confirmed_at
+    )
       throw new Error('Account unavailable')
     const email = account.user.email
     const auth = backend(process.env.SUPABASE_PUBLISHABLE_KEY).auth
@@ -70,15 +81,25 @@ export default async function handler(req, res) {
           .json({ error: 'Could not send a code. Please try again shortly.' })
       return res.json({ sent: true })
     }
-    const { data, error: verifyError } = await auth.verifyOtp({
-      email,
-      token: code,
-      type: 'email',
-    })
+    const { data, error: verifyError } =
+      action === 'password'
+        ? await auth.signInWithPassword({ email, password })
+        : await auth.verifyOtp({ email, token: code, type: 'email' })
+    if (verifyError?.status === 429) {
+      return res.status(429).json({ error: 'Please wait before trying again.' })
+    }
+    if (verifyError && (!verifyError.status || verifyError.status >= 500)) {
+      throw new Error('Authentication provider unavailable')
+    }
     if (verifyError || !data.session || data.user?.id !== profileRow.id) {
       return res
         .status(401)
-        .json({ error: 'This code is incorrect or has expired.' })
+        .json({
+          error:
+            action === 'password'
+              ? 'The password is incorrect for this profile.'
+              : 'This code is incorrect or has expired.',
+        })
     }
     return res.json({
       access_token: data.session.access_token,

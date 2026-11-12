@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Bell, ChevronRight, Heart, Lock } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { db, unwrap } from './data'
-import { Avatar, Back, ErrorMessage, useAction } from './ui'
+import { Avatar, Back, ErrorMessage, Field, useAction } from './ui'
 
 const identities = {
   semsem: ['Semsem', 'Sama'],
@@ -10,11 +10,17 @@ const identities = {
 } as const
 type Identity = keyof typeof identities
 
-async function otp(profile: Identity, action: string, code?: string) {
+const otpEnabled = import.meta.env.VITE_OUR_SPACE_AUTH_MODE === 'otp'
+
+async function authRequest(
+  profile: Identity,
+  action: string,
+  credential: { code?: string; password?: string } = {},
+) {
   const response = await fetch('/api/auth', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profile, action, code }),
+    body: JSON.stringify({ profile, action, ...credential }),
   })
   const body = await response.json().catch(() => ({}))
   if (!response.ok)
@@ -74,7 +80,7 @@ export function Choose({ choose }: { choose: (key: Identity) => void }) {
             disabled={action.busy}
             onClick={() =>
               void action.run(async () => {
-                await otp(key, 'request')
+                if (otpEnabled) await authRequest(key, 'request')
                 choose(key)
                 navigate('/verify')
               })
@@ -91,8 +97,9 @@ export function Choose({ choose }: { choose: (key: Identity) => void }) {
         <div>
           <b>Private, just for two</b>
           <p>
-            Each profile uses its own secure email sign-in. The code goes to the
-            registered address for that profile.
+            {otpEnabled
+              ? 'Each profile uses its own secure email sign-in. The code goes to its registered address.'
+              : 'Each profile uses its own account password.'}
           </p>
         </div>
       </div>
@@ -102,11 +109,78 @@ export function Choose({ choose }: { choose: (key: Identity) => void }) {
 }
 
 export function Verify({ identity }: { identity: Identity | null }) {
+  if (!identity) return <Navigate replace to="/choose-profile" />
+  return otpEnabled ? (
+    <VerifyOtp identity={identity} />
+  ) : (
+    <PasswordSignIn identity={identity} />
+  )
+}
+
+function PasswordSignIn({ identity }: { identity: Identity }) {
+  const [nickname, name] = identities[identity]
+  const input = useRef<HTMLInputElement>(null)
+  const action = useAction()
+
+  return (
+    <section className="screen auth">
+      <Back to="/choose-profile">Choose another profile</Back>
+      <div className="mt28 row">
+        <Avatar name={name} size="medium" />
+        <div>
+          <div className="eyebrow">Welcome back</div>
+          <h1>{nickname}</h1>
+        </div>
+      </div>
+      <div className="otp-card mt28">
+        <Lock className="icon big" />
+        <h2 className="mt16">Sign in to Our Space</h2>
+        <p className="page-sub">
+          Enter the password for your {nickname} account.
+        </p>
+      </div>
+      <form
+        className="mt28"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const field = input.current
+          if (!field || !field.value || action.busy) return
+          void action.run(async () => {
+            try {
+              const tokens = await authRequest(identity, 'password', {
+                password: field.value,
+              })
+              unwrap(await db.auth.setSession(tokens))
+            } finally {
+              field.value = ''
+            }
+          })
+        }}
+      >
+        <Field label="Password">
+          <input
+            ref={input}
+            type="password"
+            autoComplete="current-password"
+            required
+            maxLength={4096}
+            readOnly={action.busy}
+          />
+        </Field>
+        <button className="primary wide mt22" disabled={action.busy}>
+          {action.busy ? 'Signing in…' : 'Sign in'} <ChevronRight />
+        </button>
+      </form>
+      <ErrorMessage value={action.error} />
+    </section>
+  )
+}
+
+function VerifyOtp({ identity }: { identity: Identity }) {
   const [code, setCode] = useState('')
   const [resent, setResent] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const action = useAction()
-  if (!identity) return <Navigate replace to="/choose-profile" />
   const [nickname, name] = identities[identity]
   return (
     <section className="screen auth">
@@ -130,7 +204,7 @@ export function Verify({ identity }: { identity: Identity | null }) {
         onSubmit={(event) => {
           event.preventDefault()
           void action.run(async () => {
-            const tokens = await otp(identity, 'verify', code)
+            const tokens = await authRequest(identity, 'verify', { code })
             unwrap(await db.auth.setSession(tokens))
           })
         }}
@@ -173,7 +247,7 @@ export function Verify({ identity }: { identity: Identity | null }) {
         disabled={action.busy}
         onClick={() =>
           void action.run(async () => {
-            await otp(identity, 'request')
+            await authRequest(identity, 'request')
             setResent(true)
           })
         }

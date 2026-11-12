@@ -90,3 +90,35 @@ test('production API validates sign-in input and protects the worker', async ({
   const worker = await request.get('/api/push-cron')
   expect(worker.status()).toBe(401)
 })
+
+test('profile selection opens a password form without contacting the OTP broker', async ({
+  page,
+}) => {
+  let requests = 0
+  await page.route('**/api/auth', async (route) => {
+    requests++
+    const payload = route.request().postDataJSON()
+    expect(payload).toEqual({
+      profile: 'sasa',
+      action: 'password',
+      password: ' test-only value ',
+    })
+    await route.fulfill({
+      status: 401,
+      json: { error: 'The password is incorrect for this profile.' },
+    })
+  })
+  await page.goto('/choose-profile')
+  await page.getByRole('button', { name: /Sasa/ }).click()
+  const password = page.getByLabel('Password', { exact: true })
+  await expect(password).toHaveAttribute('type', 'password')
+  await expect(password).toHaveAttribute('autocomplete', 'current-password')
+  expect(requests).toBe(0)
+  await password.fill(' test-only value ')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByRole('alert')).toHaveText(
+    'The password is incorrect for this profile.',
+  )
+  await expect(password).toHaveValue('')
+  expect(requests).toBe(1)
+})

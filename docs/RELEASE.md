@@ -4,14 +4,14 @@ The production Vercel project is `ahmed-s-projectssasa/our-space`. The intended 
 
 ## Enrollment and protected settings
 
-1. In Supabase Authentication, disable public user signups. Configure custom SMTP and customize the Magic Link template to display `{{ .Token }}` as the six-digit sign-in code. Set the Auth Site URL to the production Vercel URL. Keep secure email change enabled.
+1. Keep public Supabase Auth signups disabled. Our Space currently uses the two enrolled accounts and their existing passwords. To restore OTP later, configure the email provider and six-digit template, set both `OUR_SPACE_AUTH_MODE` and `VITE_OUR_SPACE_AUTH_MODE` to `otp`, then redeploy.
 2. Create the two approved users in Supabase Authentication using their private email addresses, and confirm their emails through the authorized enrollment flow. Run the private enrollment SQL in the Supabase SQL editor with their assigned Auth UUIDs. The SQL assigns the two profile slots and creates their initial love buttons. Keep the completed SQL local.
 3. In the Vercel project settings, add a sensitive production variable named `SUPABASE_SERVICE_ROLE_KEY` with the server-only key from this Supabase project. Redeploy the production build. Keep the key out of `VITE_*` variables.
 4. Enable notifications on the first enrolled device. Registration creates the Supabase Cron retry job and stores the Vercel worker credential in Vault. Chat triggers an immediate attempt and the schedule processes due retries even when both apps are closed.
 
 ## Install on both iPhones
 
-Open the production URL in Safari, tap Share and Add to Home Screen, then open Our Space from its icon. Select your own profile and sign in with the emailed code. Open your profile and choose Notifications, then Enable Notifications. Use iOS 16.4 or later.
+Open the production URL in Safari, tap Share and Add to Home Screen, then open Our Space from its icon. Select your own profile and sign in with your existing account password. Open your profile and choose Notifications, then Enable Notifications. Use iOS 16.4 or later.
 
 Verify the following with the two enrolled devices.
 
