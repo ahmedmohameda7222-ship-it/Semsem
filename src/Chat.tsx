@@ -383,6 +383,22 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
           responded_at: new Date().toISOString(), reply_text: content,
         } : item,
       ))
+      setEntries((current) => [
+        ...current.filter((item) => item.id !== retryId),
+        {
+          id: retryId,
+          sender_id: me.id,
+          recipient_id: entry.sender_id,
+          title: null,
+          icon: null,
+          tint: null,
+          body: content,
+          created_at: new Date().toISOString(),
+          read_at: null,
+          responded_at: null,
+          in_reply_to: entry.id,
+        },
+      ].sort(compare))
       setReplyingTo(undefined)
       setReplyText('')
       replyIds.current.delete(entry.id)
