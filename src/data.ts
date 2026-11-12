@@ -19,6 +19,8 @@ export type Profile = {
   avatar_path: string | null
   theme: Theme
   reduce_motion: boolean
+  mood?: 'happy' | 'missing' | 'sad' | 'tired' | 'stressed' | 'excited' | 'loved' | null
+  mood_updated_at?: string | null
 }
 export type Template = {
   id: string
@@ -41,6 +43,9 @@ export type Entry = {
   created_at: string
   read_at: string | null
   responded_at: string | null
+  duration_seconds?: number | null
+  reply_text?: string | null
+  in_reply_to?: string | null
 }
 export type Reaction = { entry_id: string; user_id: string; reaction: string }
 export type Milestone = {
