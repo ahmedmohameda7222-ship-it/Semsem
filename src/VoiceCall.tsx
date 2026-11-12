@@ -630,7 +630,7 @@ export function VoiceCallProvider({
                 {relayAvailable === false && ' · TURN relay unavailable'}
               </p>
             )}
-            {audioRoute && <p className="hint" role="status">{audioRoute}</p>
+            {audioRoute && <p className="hint" role="status">{audioRoute}</p>}
             {playbackBlocked && (
               <button
                 className="outline"
