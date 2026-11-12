@@ -45,17 +45,14 @@ export function Welcome() {
           Our Space<span className="accent">.</span>
         </h1>
         <div className="tagline">Just you, me, and our little world.</div>
-        <p className="desc">
-          Every sweet request, every little memory, every beautiful moment —
-          together, in one place.
-        </p>
+
         <button
           className="primary wide"
           onClick={() => navigate('/choose-profile')}
         >
           Enter Our World <ChevronRight />
         </button>
-        <div className="auth-foot">♡ Made just for Ahmed &amp; Sama</div>
+        <div className="auth-foot">Made just for Us ♡</div>
       </div>
     </section>
   )
