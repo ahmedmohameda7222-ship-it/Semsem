@@ -291,7 +291,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
         .filter((entry) => entry.recipient_id === me.id && !entry.read_at)
         .map((entry) => entry.id)
       if (unseen.length) {
-        void db.rpc('read_chat', { entries: unseen }).catch(() => {})
+        void db.rpc('read_chat', { entries: unseen }).then(() => {}, () => {})
       }
     }
     mark()
