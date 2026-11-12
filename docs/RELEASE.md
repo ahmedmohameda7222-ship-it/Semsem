@@ -7,7 +7,7 @@ The production Vercel project is `ahmed-s-projectssasa/our-space`. The intended 
 1. In Supabase Authentication, disable public user signups. Configure custom SMTP and customize the Magic Link template to display `{{ .Token }}` as the six-digit sign-in code. Set the Auth Site URL to the production Vercel URL. Keep secure email change enabled.
 2. Create the two approved users in Supabase Authentication using their private email addresses, and confirm their emails through the authorized enrollment flow. Run the private enrollment SQL in the Supabase SQL editor with their assigned Auth UUIDs. The SQL assigns the two profile slots and creates their initial love buttons. Keep the completed SQL local.
 3. In the Vercel project settings, add a sensitive production variable named `SUPABASE_SERVICE_ROLE_KEY` with the server-only key from this Supabase project. Redeploy the production build. Keep the key out of `VITE_*` variables.
-4. Schedule an authenticated GET to `/api/push-cron` every minute with the `Authorization: Bearer <CRON_SECRET>` header. The Vercel project uses Hobby, so configure an external scheduler or Supabase Cron with the credential stored in its protected secret store. Rotate the generated Vercel value to the same secret during setup. Chat triggers an immediate delivery attempt and the schedule processes retries even when both apps are closed.
+4. Enable notifications on the first enrolled device. Registration creates the Supabase Cron retry job and stores the Vercel worker credential in Vault. Chat triggers an immediate attempt and the schedule processes due retries even when both apps are closed.
 
 ## Install on both iPhones
 

@@ -155,7 +155,9 @@ test('signed-in screens, themes, search and future child form', async ({
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'night')
   await page.screenshot({ path: info.outputPath('themes.png') })
   await page.goto('/buttons/new')
-  await expect(page.getByRole('heading', { name: 'Create a Love Button' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Create a Love Button' }),
+  ).toBeVisible()
   await expect(
     page.locator('.icon-grid button').count(),
   ).resolves.toBeGreaterThanOrEqual(36)
@@ -169,6 +171,7 @@ test('signed-in screens, themes, search and future child form', async ({
 test('anniversary remains for 120 seconds without blocking navigation', async ({
   page,
 }, info) => {
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.clock.install({ time: new Date(2026, 11, 5, 12) })
   await page.goto('/dates')
   await expect(page.getByText('Happy Anniversary!')).toBeVisible()

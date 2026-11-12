@@ -24,12 +24,17 @@
     "@types/node": "24.10.1",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "eslint": "9.39.1",
-    "globals": "16.5.0",
+    "eslint": "9.39.5",
+    "globals": "17.14.0",
     "prettier": "3.7.4",
-    "tsx": "4.21.0",
+    "tsx": "4.23.15",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.48.1",
-    "vite": "7.2.6"
+    "typescript-eslint": "8.72.2",
+    "vite": "7.3.8"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.1"
+    }
   }
 }

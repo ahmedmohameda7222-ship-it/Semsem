@@ -75,3 +75,18 @@ test('production service worker controls the shell and reopens offline', async (
     page.getByRole('button', { name: 'Enter Our World' }),
   ).toBeVisible()
 })
+
+test('production API validates sign-in input and protects the worker', async ({
+  request,
+}) => {
+  test.skip(!process.env.TEST_BASE_URL, 'Requires Vercel server functions')
+  const auth = await request.post('/api/auth', {
+    data: { profile: 'unknown', action: 'request' },
+  })
+  expect(auth.status()).toBe(400)
+  expect(auth.headers()['cache-control']).toContain('no-store')
+  const push = await request.post('/api/push', { data: { action: 'flush' } })
+  expect(push.status()).toBe(401)
+  const worker = await request.get('/api/push-cron')
+  expect(worker.status()).toBe(401)
+})

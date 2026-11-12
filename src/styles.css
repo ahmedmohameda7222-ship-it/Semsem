@@ -190,3 +190,7 @@ body {
     padding-inline: 17px;
   }
 }
+.palette:disabled {
+  opacity: 1;
+  cursor: progress;
+}

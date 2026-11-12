@@ -37,6 +37,11 @@ export default async function handler(req, res) {
       /^[A-Za-z0-9_-]{87}$/.test(keys.p256dh) &&
       /^[A-Za-z0-9_-]{22}$/.test(keys.auth)
     ) {
+      const { error: schedulerError } = await db.rpc('setup_push_scheduler', {
+        origin: process.env.VAPID_SUBJECT,
+        token: process.env.CRON_SECRET,
+      })
+      if (schedulerError) throw schedulerError
       const { error } = await db
         .from('push_subscriptions')
         .upsert(

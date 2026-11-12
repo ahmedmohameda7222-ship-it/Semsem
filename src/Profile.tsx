@@ -329,9 +329,8 @@ export function Notifications({ partner }: { partner?: Profile }) {
                   setEnabled(false)
                   return
                 }
-                const applicationServerKey = import.meta.env
-                  .VITE_VAPID_PUBLIC_KEY
-                if (!applicationServerKey)
+                const publicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
+                if (!publicKey)
                   throw new Error('Notifications are temporarily unavailable.')
                 if ((await Notification.requestPermission()) !== 'granted')
                   throw new Error(
@@ -341,6 +340,13 @@ export function Notifications({ partner }: { partner?: Profile }) {
                   await navigator.serviceWorker.getRegistration()
                 if (!registration?.active)
                   throw new Error('Refresh Our Space and try again.')
+                const decodedKey = publicKey
+                  .replace(/-/g, '+')
+                  .replace(/_/g, '/')
+                const applicationServerKey = Uint8Array.from(
+                  atob(decodedKey),
+                  (character) => character.charCodeAt(0),
+                )
                 const subscription =
                   await registration.pushManager.getSubscription()
                 const sub =
