@@ -35,11 +35,13 @@ export function PrivateMedia({
   path,
   kind,
   alt,
+  duration,
 }: {
   bucket: Bucket
   path: string
   kind: MediaKind
   alt: string
+  duration?: number | null
 }) {
   const [signed, setSigned] = useState<{ path: string; url: string }>()
   const [failed, setFailed] = useState(false)
@@ -91,7 +93,7 @@ export function PrivateMedia({
       </p>
     )
   return kind === 'audio' ? (
-    <VoiceWaveform src={signed.url} label={alt} />
+    <VoiceWaveform src={signed.url} label={alt} durationHint={duration ?? undefined} />
   ) : (
     <a
       className="private-photo"
@@ -185,11 +187,19 @@ export function ChatAttachments({
         next.contentType,
       )
       unwrap(
-        await db.rpc('send_media', {
-          entry: next.id,
-          kind: next.kind,
-          object_path: path,
-        }),
+        next.kind === 'audio'
+          ? await db.rpc('send_media_with_duration', {
+              entry: next.id,
+              kind: next.kind,
+              object_path: path,
+              caption: '',
+              seconds: Math.max(1, Math.round(next.duration ?? 0)),
+            })
+          : await db.rpc('send_media', {
+              entry: next.id,
+              kind: next.kind,
+              object_path: path,
+            }),
       )
       await onSent(next.id)
       setDraft(undefined)
