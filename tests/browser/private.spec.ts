@@ -385,19 +385,25 @@ for (const [index, width] of widths.entries()) {
 
 test('voice note clock starts, stops and shows final duration', async ({
   page,
-}) => {
+}, info) => {
+  await page.setViewportSize({ width: 320, height: 780 })
   await page.goto('/chat')
   await page.getByRole('button', { name: 'Record voice note' }).click()
-  const timer = page.locator('.chat-attachments time')
+  const timer = page.locator('.voice-recording-status time')
   await expect(timer).toHaveText('00:00')
+  await expect(page.getByRole('img', { name: 'Live microphone waveform' })).toBeVisible()
   await expect(timer).toHaveText(/^00:0[1-5]$/)
   await page.getByRole('button', { name: 'Stop recording' }).click()
   await expect(
     page.locator('audio[aria-label="Voice note preview"]'),
-  ).toBeVisible()
-  await expect(timer).toHaveText(/^00:0[1-5]$/)
+  ).toBeAttached()
+  await expect(page.locator('.attachment-draft .voice-bar')).toHaveCount(36)
+  await expect(page.getByRole('button', { name: 'Play Voice note preview' })).toBeVisible()
+  await expect(page.locator('.attachment-draft .voice-times time').last()).toHaveText(/^00:0[1-5]$/)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+  await page.screenshot({ path: info.outputPath('waveform-voice-preview-320.png') })
   await page.getByRole('button', { name: 'Discard attachment' }).click()
-  await expect(timer).toHaveCount(0)
+  await expect(page.locator('.attachment-draft .voice-message')).toHaveCount(0)
 })
 
 const callId = 'bb76d540-9327-4e22-9f52-36dcf43e672b'
@@ -429,6 +435,7 @@ for (const [i, width] of [320, 375, 390, 430].entries()) {
       const screen = page.getByRole('region', { name: 'Incoming Voice Call' })
       await expect(screen.getByRole('button', { name: 'Answer' })).toBeVisible()
       await expect(screen).toContainText('Semsem is calling')
+      await expect(screen.locator('.call-wave-rings span')).toHaveCount(3)
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),
       ).toBe(width)

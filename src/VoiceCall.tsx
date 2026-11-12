@@ -455,24 +455,29 @@ export function VoiceCallProvider({
     }
   }, [])
 
+  // Browser-generated, original tones (no external audio asset).
+  // Caller hears ringback while the invitation is being delivered;
+  // recipient hears a distinct ringtone while the app is foregrounded.
   useEffect(() => {
-    if (call?.state !== 'incoming') return
+    const outgoing = call?.state === 'calling'
+    if (!outgoing && call?.state !== 'incoming') return
     const playing = new Set<OscillatorNode>()
     const ring = () => {
       const audio = audioContext.current
       if (document.hidden || !audio || audio.state !== 'running') return
-      for (const [offset, frequency] of [
-        [0, 523],
-        [0.23, 659],
-      ]) {
+      const notes = outgoing
+        ? [[0, 440], [0, 480]]
+        : [[0, 523], [0.23, 659]]
+      for (const [offset, frequency] of notes) {
         const start = audio.currentTime + offset
+        const length = outgoing ? 0.65 : 0.18
         const oscillator = audio.createOscillator()
         const volume = audio.createGain()
         oscillator.type = 'sine'
         oscillator.frequency.value = frequency
         volume.gain.setValueAtTime(0, start)
-        volume.gain.linearRampToValueAtTime(0.1, start + 0.035)
-        volume.gain.exponentialRampToValueAtTime(0.001, start + 0.18)
+        volume.gain.linearRampToValueAtTime(outgoing ? 0.05 : 0.1, start + 0.04)
+        volume.gain.exponentialRampToValueAtTime(0.001, start + length)
         oscillator.connect(volume).connect(audio.destination)
         playing.add(oscillator)
         oscillator.onended = () => {
@@ -481,18 +486,18 @@ export function VoiceCallProvider({
           volume.disconnect()
         }
         oscillator.start(start)
-        oscillator.stop(start + 0.2)
+        oscillator.stop(start + length + 0.01)
       }
     }
     ring()
-    const repeat = setInterval(ring, 2000)
+    const repeat = setInterval(ring, outgoing ? 2800 : 2000)
     return () => {
       clearInterval(repeat)
       playing.forEach((oscillator) => {
         try {
           oscillator.stop()
         } catch {
-          /* ended */
+          /* already ended */
         }
       })
     }
@@ -508,9 +513,17 @@ export function VoiceCallProvider({
           ? 'Connecting…'
           : 'Connected'
   const connected = call?.state === 'connected'
+  function startOutgoing() {
+    // Prime Web Audio within the user's tap; iOS forbids unprompted sound.
+    if (window.AudioContext) {
+      audioContext.current ??= new AudioContext()
+      void audioContext.current.resume().catch(() => {})
+    }
+    begin()
+  }
   return (
     <context.Provider
-      value={{ start: () => begin(), disabled: !partner || Boolean(call) }}
+      value={{ start: startOutgoing, disabled: !partner || Boolean(call) }}
     >
       {children}
       <audio
@@ -548,11 +561,20 @@ export function VoiceCallProvider({
                 : '')
             }
           >
-            <Avatar
-              name={partner?.real_name ?? nickname}
-              path={partner?.avatar_path}
-              size="large"
-            />
+            <div className="call-avatar-wrap">
+              {(call?.state === 'calling' || call?.state === 'incoming') && (
+                <div className="call-wave-rings" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              )}
+              <Avatar
+                name={partner?.real_name ?? nickname}
+                path={partner?.avatar_path}
+                size="large"
+              />
+            </div>
             <h1>{nickname}</h1>
             <p role="status">{call ? label : message}</p>
             {call?.state === 'incoming' && <p>{nickname} is calling…</p>}
