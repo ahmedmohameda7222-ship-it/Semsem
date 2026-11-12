@@ -21,4 +21,4 @@ Verify the following with the two enrolled devices.
 - Test private profile and child photo uploads, the chat keyboard, Home Screen safe areas, and notification disable.
 - Confirm changing a date does not notify either user.
 
-The Memories gallery, photo attachments in chat, and voice notes are deferred under the approved plan.
+Chat supports private photo attachments and voice notes. Our World includes a shared Memories gallery with captions. To start a live voice call, both people open Chat and allow microphone access. Calls use peer-to-peer WebRTC and public STUN for network discovery. A TURN relay is not configured, so a restrictive network may prevent the call from connecting.
