@@ -267,6 +267,7 @@ export function Notifications() {
   const navigate = useNavigate()
   const action = useAction()
   const [enabled, setEnabled] = useState(false)
+  const [testResult, setTestResult] = useState('')
   const supported =
     'Notification' in window &&
     'PushManager' in window &&
@@ -364,6 +365,22 @@ export function Notifications() {
         {!supported && (!ios || standalone) && (
           <p className="hint mt8">This browser does not support Web Push.</p>
         )}
+        <div className="notification-diagnostics">
+          <button className="outline wide" type="button"
+            aria-label="Send test notification"
+            disabled={!enabled || action.busy}
+            onClick={() => void action.run(async () => {
+              setTestResult('')
+              const result = await push('test') as { accepted?: number, devices?: number } | null
+              setTestResult(result?.accepted
+                ? 'Push service accepted the test for ' + result.accepted + ' device(s). Check your iPhone Notification Center.'
+                : 'No push service accepted the test. Disable notifications, re-enable them, then try again.')
+            })}>
+            <Bell size={17} /> Send test notification
+          </button>
+          <p className="hint mt8">Delivery to the push service does not guarantee your iPhone displayed the alert. Check iPhone Settings → Notifications → Our Space, Focus modes, and Show Previews.</p>
+          {testResult && <p className="hint" role="status">{testResult}</p>}
+        </div>
         <ErrorMessage value={action.error} />
       </div>
     </Page>
