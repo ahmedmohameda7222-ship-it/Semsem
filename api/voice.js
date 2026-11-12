@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { backend, post } from '../server/supabase.js'
 import { allowedEndpoint, sendWebPush } from '../server/push.js'
+import { iceConfiguration } from '../server/ice.js'
 
-const stun = [{ urls: 'stun:stun.cloudflare.com:3478' }]
 
 export default async function handler(req, res) {
   try {
@@ -25,41 +25,17 @@ export default async function handler(req, res) {
     if (action === 'ice') {
       const key = process.env.CLOUDFLARE_TURN_KEY_ID
       const secret = process.env.CLOUDFLARE_TURN_API_TOKEN
-      if (!key || !secret) return res.json({ iceServers: stun, relay: false })
-      const bucket = createHash('sha256').update(user.id).digest('hex')
-      const { data: allowed, error } = await db.rpc('consume_otp', {
-        bucket_key: 'voice:ice:' + bucket,
-        max_hits: 30,
-        window_seconds: 600,
-      })
-      if (error) throw error
-      if (!allowed) return res.status(429).end()
-      const response = await fetch(
-        'https://rtc.live.cloudflare.com/v1/turn/keys/' +
-          encodeURIComponent(key) +
-          '/credentials/generate-ice-servers',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer ' + secret,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ ttl: 3600 }),
-          signal: AbortSignal.timeout(5000),
-        },
-      )
-      if (!response.ok) throw new Error('TURN unavailable')
-      const data = await response.json()
-      const configured = Array.isArray(data.iceServers)
-        ? data.iceServers
-        : [data.iceServers]
-      const relay = configured.some((item) =>
-        [item?.urls]
-          .flat()
-          .some((url) => typeof url === 'string' && /^turns?:/.test(url)),
-      )
-      if (!relay) throw new Error('TURN unavailable')
-      return res.json({ iceServers: [...stun, ...configured], relay: true })
+      if (key && secret) {
+        const bucket = createHash('sha256').update(user.id).digest('hex')
+        const { data: allowed, error } = await db.rpc('consume_otp', {
+          bucket_key: 'voice:ice:' + bucket,
+          max_hits: 30,
+          window_seconds: 600,
+        })
+        if (error) throw error
+        if (!allowed) return res.status(429).end()
+      }
+      return res.json(await iceConfiguration({ key, secret }))
     }
     if (
       action !== 'notify' ||

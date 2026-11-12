@@ -24,7 +24,9 @@ begin
     begin
       perform public.send_chat(entry_id,'Outsider message');
       raise exception 'Outsider message succeeded' using errcode='ZZ101';
-    exception when raise_exception then null;
+    exception when sqlstate 'ZZ101' then raise;
+    when others then
+      if SQLERRM not like '%Membership required%' then raise; end if;
     end;
     perform set_config('request.jwt.claim.sub',first_id::text,true);
     if (select count(*) from public.profiles) <> 2 then raise exception 'Member cannot see pair'; end if;

@@ -19,19 +19,25 @@ begin
     begin
       perform public.start_voice(gen_random_uuid(),'duplicate');
       raise exception 'Duplicate active call allowed' using errcode='ZZ101';
-    exception when raise_exception then null;
+    exception when sqlstate 'ZZ101' then raise;
+    when others then
+      if SQLERRM not like '%Another call is already active%' then raise; end if;
     end;
     begin
       perform public.change_voice(call_key,'answer','forged');
       raise exception 'Caller could forge answer' using errcode='ZZ102';
-    exception when raise_exception then null;
+    exception when sqlstate 'ZZ102' then raise;
+    when others then
+      if SQLERRM not like '%Invalid call transition%' then raise; end if;
     end;
     perform set_config('request.jwt.claim.sub',outsider::text,true);
     if exists(select 1 from public.voice_calls where id=call_key) then raise exception 'Outsider can read invitation'; end if;
     begin
       perform public.change_voice(call_key,'answer','outsider');
       raise exception 'Outsider could answer' using errcode='ZZ103';
-    exception when raise_exception then null;
+    exception when sqlstate 'ZZ103' then raise;
+    when others then
+      if SQLERRM not like '%Call unavailable%' then raise; end if;
     end;
     perform set_config('request.jwt.claim.sub',b::text,true);
     row := public.change_voice(call_key,'answer','test answer');
