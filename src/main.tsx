@@ -29,7 +29,8 @@ import {
 import { Memories } from './Media'
 import { VoiceCallProvider } from './VoiceCall'
 import { ChildEditor, Family, Jar, NoteEditor, World } from './World'
-import { configured, db, unwrap } from './data'
+import { configured, db, push, unwrap } from './data'
+import { restorePushSubscription } from './pushRecovery'
 import type { Child, Milestone, Note, Profile, Template } from './data'
 import { applyTheme } from './themes'
 import './reference.css'
@@ -128,6 +129,41 @@ function PrivateSpace({ userId, online }: { userId: string; online: boolean }) {
   useEffect(() => {
     sessionStorage.removeItem('our-space-return')
   }, [])
+
+  useEffect(() => {
+    // Repair lost server-side push registrations after provider revocations or
+    // transient disconnections, without asking the user for permission again.
+    let lastCheck = 0
+    const reconnect = () => {
+      if (
+        !navigator.onLine ||
+        document.hidden ||
+        !('Notification' in window) ||
+        !('serviceWorker' in navigator)
+      )
+        return
+      if (Date.now() - lastCheck < 300_000) return
+      lastCheck = Date.now()
+      void restorePushSubscription({
+        permission: () => Notification.permission,
+        existing: async () => {
+          const registration = await navigator.serviceWorker.getRegistration()
+          return (await registration?.pushManager?.getSubscription()) ?? null
+        },
+        register: async (fields) => { await push('register', fields) },
+      }).catch(() => {
+        // Retry on the next foreground/reconnect rather than interrupt Chat.
+        lastCheck = 0
+      })
+    }
+    reconnect()
+    window.addEventListener('focus', reconnect)
+    window.addEventListener('online', reconnect)
+    return () => {
+      window.removeEventListener('focus', reconnect)
+      window.removeEventListener('online', reconnect)
+    }
+  }, [userId])
 
   const reload = useCallback(async () => {
     const [profiles, buttons, dates, children, notes, count] =
