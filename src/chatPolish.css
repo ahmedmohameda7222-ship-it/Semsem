@@ -749,3 +749,84 @@
   .voice-composer { gap: 3px; padding-inline: 3px; }
   .voice-composer button { flex-basis: 36px; min-width: 36px; width: 36px; }
 }
+
+/* Private mood sharing and concise request response controls. */
+.mood-panel {
+  padding: 12px 14px;
+  margin: 12px 0 17px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.mood-panel .row > div { min-width: 0; }
+.mood-panel .outline { min-height: 44px; flex: 0 0 auto; }
+.mood-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(118px,1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+.mood-options button {
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+}
+.mood-options button[aria-pressed='true'] {
+  background: var(--subtle);
+  border-color: var(--primary);
+}
+.request-reply {
+  margin-top: 10px;
+  min-width: 0;
+}
+.request-reply-open {
+  min-height: 42px;
+}
+.request-reply form {
+  display: grid;
+  gap: 8px;
+}
+.request-reply textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.request-reply .row { gap: 8px; flex-wrap: wrap; }
+.request-reply .row button { min-height: 44px; }
+.request-reply-saved,
+.reply-context {
+  margin: 9px 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--primary);
+  border-radius: 7px;
+  background: var(--subtle);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.chat-delivery.is-seen {
+  color: var(--primary);
+  font-weight: 700;
+}
+.notification-diagnostics {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.call-network-status { max-width: 290px; margin-inline: auto; }
+@media (max-width: 350px) {
+  .mood-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .request-reply textarea { font-size: 16px; }
+}
