@@ -76,7 +76,7 @@ end $$;
 
 create or replace function our_space_private.set_mood(new_mood text,entry uuid)
 returns uuid language plpgsql security definer set search_path='' as $$
-declare current_user uuid:=auth.uid();
+declare actor_id uuid:=auth.uid();
 declare nickname text;
 declare description text;
 begin
@@ -84,9 +84,9 @@ begin
   if new_mood not in ('happy','missing','sad','tired','stressed','excited','loved') or entry is null then
     raise exception 'Invalid mood';
   end if;
-  if exists(select 1 from public.chat_entries where id=entry and sender_id=current_user) then return entry; end if;
+  if exists(select 1 from public.chat_entries where id=entry and sender_id=actor_id) then return entry; end if;
   update public.profiles set mood=new_mood,mood_updated_at=now()
-   where id=current_user returning profiles.nickname into nickname;
+   where id=actor_id returning profiles.nickname into nickname;
   if nickname is null then raise exception 'Profile unavailable'; end if;
   description:=case new_mood
     when 'happy' then 'Happy 😊'
