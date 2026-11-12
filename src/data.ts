@@ -94,6 +94,7 @@ export async function push(action: string, fields: object = {}) {
   })
   if (!response.ok)
     throw new Error('Notifications are temporarily unavailable.')
+  return response.status === 204 ? null : response.json()
 }
 
 export function flushPush() {
