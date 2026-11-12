@@ -51,8 +51,9 @@ grant execute on function public.send_media_with_duration(uuid,text,text,text,in
 -- nonempty replies are linked to their request and generate a normal notification.
 create or replace function our_space_private.respond(entry uuid,reply text,reply_id uuid)
 returns void language plpgsql security definer set search_path='' as $$
-declare target public.chat_entries;
-declare saved uuid;
+declare
+  target public.chat_entries;
+  saved uuid;
 begin
   if not our_space_private.is_member() then raise exception 'Membership required'; end if;
   if reply_id is null or trim(coalesce(reply,''))='' or length(trim(reply))>500 then
