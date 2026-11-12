@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { ChevronDown, Mic, MicOff, Phone, PhoneOff } from 'lucide-react'
+import { ChevronDown, Mic, MicOff, Phone, PhoneOff, Volume2 } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { db, unwrap } from './data'
 import type { Profile } from './data'
@@ -42,8 +42,8 @@ async function requestVoice(action: 'ice' | 'notify', call?: string) {
   if (!response.ok)
     throw new Error('The call service is temporarily unavailable.')
   if (action === 'ice')
-    return (await response.json()).iceServers as RTCIceServer[]
-  return []
+    return (await response.json()) as { iceServers: RTCIceServer[]; relay: boolean }
+  return { iceServers: [], relay: false }
 }
 
 function gatherIce(peer: RTCPeerConnection) {
@@ -57,7 +57,9 @@ function gatherIce(peer: RTCPeerConnection) {
     const changed = () => {
       if (peer.iceGatheringState === 'complete') finish()
     }
-    const timer = setTimeout(finish, 8000)
+    // Across continents, TURN relay candidates may take longer than 8s.
+    // This is non-trickle signaling: offer/answer must include full ICE candidates.
+    const timer = setTimeout(finish, 20000)
     peer.addEventListener('icegatheringstatechange', changed)
   })
 }
@@ -95,6 +97,10 @@ export function VoiceCallProvider({
   const [started, setStarted] = useState<number>()
   const [seconds, setSeconds] = useState(0)
   const [playbackBlocked, setPlaybackBlocked] = useState(false)
+  const [relayAvailable, setRelayAvailable] = useState<boolean | null>(null)
+  const [networkStatus, setNetworkStatus] = useState('')
+  const [audioRoute, setAudioRoute] = useState('')
+
   const active = useRef<Call | undefined>(undefined)
   const peer = useRef<RTCPeerConnection | null>(null)
   const microphone = useRef<MediaStream | null>(null)
@@ -129,6 +135,9 @@ export function VoiceCallProvider({
     setSeconds(0)
     setMuted(false)
     setPlaybackBlocked(false)
+    setRelayAvailable(null)
+    setNetworkStatus('')
+    setAudioRoute('')
     show(undefined)
   }
 
@@ -178,15 +187,25 @@ export function VoiceCallProvider({
       return
     }
     microphone.current = stream
-    const iceServers = await requestVoice('ice')
+    const { iceServers, relay } = await requestVoice('ice')
     if (active.current?.id !== id) return
-    const connection = new RTCPeerConnection({ iceServers })
+    setRelayAvailable(relay)
+    setNetworkStatus(relay ? 'Secure relay ready' : 'Direct network connection only')
+    const connection = new RTCPeerConnection({ iceServers, iceTransportPolicy: 'all' })
     peer.current = connection
     stream.getTracks().forEach((track) => connection.addTrack(track, stream))
     connection.ontrack = ({ streams, track }) => {
       if (!playback.current || active.current?.id !== id) return
       playback.current.srcObject = streams[0] ?? new MediaStream([track])
       void playback.current.play().catch(() => setPlaybackBlocked(true))
+    }
+    connection.oniceconnectionstatechange = () => {
+      if (active.current?.id !== id) return
+      setNetworkStatus('Network: ' + connection.iceConnectionState)
+      if (connection.iceConnectionState === 'failed' &&
+          connection.connectionState !== 'closed') {
+        end('Could not connect audio across these networks. Check your connection and try again.')
+      }
     }
     connection.onconnectionstatechange = () => {
       if (active.current?.id !== id) return
@@ -210,6 +229,9 @@ export function VoiceCallProvider({
     await gatherIce(connection)
     const sdp = connection.localDescription?.sdp
     if (!sdp || active.current?.id !== id) return
+    if (!/^a=candidate:/m.test(sdp)) {
+      throw new Error('The network did not provide an audio route. Try mobile data or another Wi-Fi.')
+    }
     if (offer) {
       const invite = await transition(id, 'answer', sdp)
       if (active.current?.id !== id) return
@@ -218,7 +240,7 @@ export function VoiceCallProvider({
         return
       }
       if (startedAt.current === undefined)
-        arm(id, 30000, 'The connection could not be established.')
+        arm(id, 35000, 'The connection could not be established. Try changing Wi-Fi or using mobile data.')
     } else {
       const invite = unwrap(
         await db.rpc('start_voice', { call_id: id, offer_sdp: sdp }),
@@ -251,7 +273,7 @@ export function VoiceCallProvider({
     show(current)
     arm(
       current.id,
-      incoming?.expires ? incoming.expires - Date.now() + 300 : 25000,
+      incoming?.expires ? Math.max(35000, incoming.expires - Date.now() + 300) : 55000,
       'The call could not connect.',
       incoming ? 'expire' : 'end',
     )
@@ -513,6 +535,29 @@ export function VoiceCallProvider({
           ? 'Connecting…'
           : 'Connected'
   const connected = call?.state === 'connected'
+  const canSwitchOutput = Boolean(playback.current && 'setSinkId' in playback.current)
+  async function chooseSpeaker() {
+    const audio = playback.current as (HTMLAudioElement & {
+      setSinkId?: (id: string) => Promise<void>
+    }) | null
+    if (!audio?.setSinkId) {
+      setAudioRoute('iPhone Safari controls the speaker route. External speaker switching is unavailable in this PWA.')
+      return
+    }
+    try {
+      const devices = navigator.mediaDevices as MediaDevices & {
+        selectAudioOutput?: () => Promise<MediaDeviceInfo>
+      }
+      const selected = devices.selectAudioOutput
+        ? await devices.selectAudioOutput()
+        : null
+      await audio.setSinkId(selected?.deviceId || 'default')
+      await audio.play().catch(() => {})
+      setAudioRoute(selected?.label || 'Audio output selected')
+    } catch {
+      setAudioRoute('Could not change speaker. Check your phone audio output settings.')
+    }
+  }
   function startOutgoing() {
     // Prime Web Audio within the user's tap; iOS forbids unprompted sound.
     if (window.AudioContext) {
@@ -579,6 +624,13 @@ export function VoiceCallProvider({
             <p role="status">{call ? label : message}</p>
             {call?.state === 'incoming' && <p>{nickname} is calling…</p>}
             {connected && <time>{formatElapsed(seconds)}</time>}
+            {call?.state === 'connecting' && (
+              <p className="hint call-network-status" role="status">
+                {networkStatus || 'Checking secure audio route…'}
+                {relayAvailable === false && ' · TURN relay unavailable'}
+              </p>
+            )}
+            {audioRoute && <p className="hint" role="status">{audioRoute}</p>
             {playbackBlocked && (
               <button
                 className="outline"
@@ -612,6 +664,13 @@ export function VoiceCallProvider({
               >
                 {muted ? <MicOff size={18} /> : <Mic size={18} />}
                 {muted ? 'Unmute' : 'Mute'}
+              </button>
+            )}
+            {connected && (
+              <button className="outline" type="button"
+                aria-label="Choose speaker" aria-disabled={!canSwitchOutput}
+                onClick={() => void chooseSpeaker()}>
+                <Volume2 size={18} /> Speaker
               </button>
             )}
             {connected && (
