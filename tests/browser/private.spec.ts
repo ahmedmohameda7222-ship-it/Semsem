@@ -385,7 +385,8 @@ for (const [index, width] of widths.entries()) {
 
 test('voice note clock starts, stops and shows final duration', async ({
   page,
-}) => {
+}, info) => {
+  await page.setViewportSize({ width: 320, height: 780 })
   await page.goto('/chat')
   await page.getByRole('button', { name: 'Record voice note' }).click()
   const timer = page.locator('.voice-recording-status time')
@@ -399,6 +400,8 @@ test('voice note clock starts, stops and shows final duration', async ({
   await expect(page.locator('.attachment-draft .voice-bar')).toHaveCount(36)
   await expect(page.getByRole('button', { name: 'Play Voice note preview' })).toBeVisible()
   await expect(page.locator('.attachment-draft .voice-times time').last()).toHaveText(/^00:0[1-5]$/)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+  await page.screenshot({ path: info.outputPath('waveform-voice-preview-320.png') })
   await page.getByRole('button', { name: 'Discard attachment' }).click()
   await expect(page.locator('.attachment-draft .voice-message')).toHaveCount(0)
 })
@@ -432,6 +435,7 @@ for (const [i, width] of [320, 375, 390, 430].entries()) {
       const screen = page.getByRole('region', { name: 'Incoming Voice Call' })
       await expect(screen.getByRole('button', { name: 'Answer' })).toBeVisible()
       await expect(screen).toContainText('Semsem is calling')
+      await expect(screen.locator('.call-wave-rings span')).toHaveCount(3)
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),
       ).toBe(width)
