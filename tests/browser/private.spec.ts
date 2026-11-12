@@ -437,7 +437,7 @@ for (const [i, width] of [320, 375, 390, 430].entries()) {
       })
       await screen.getByRole('button', { name: 'Decline' }).click()
       await expect(screen).toHaveCount(0)
-      expect(status).toBe('declined')
+      await expect.poll(() => status).toBe('declined')
       await expect(
         page.getByRole('navigation', { name: 'Main navigation' }),
       ).toHaveCount(0)
