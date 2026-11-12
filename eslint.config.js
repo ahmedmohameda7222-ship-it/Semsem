@@ -21,6 +21,7 @@ export default tseslint.config(
     files: [
       'api/**/*.js',
       'server/**/*.js',
+      'scripts/**/*.{js,mjs}',
       'tests/**/*.{js,ts}',
       '*.js',
       '*.ts',
