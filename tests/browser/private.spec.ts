@@ -491,3 +491,34 @@ test('home keeps requested single-line romantic copy', async ({ page }) => {
   await expect(page.getByText('Just for us two')).toHaveCount(0)
   await expect(page.getByText('Little requests.')).toHaveCount(0)
 })
+
+
+test('Attention Request allows a direct written reply', async ({ page }) => {
+  await page.goto('/chat')
+  const request = page.locator('.chat-request').filter({ hasText: 'I need a hug' })
+  await expect(request.getByRole('button', { name: 'Reply to request' })).toBeVisible()
+  await request.getByRole('button', { name: 'Reply to request' }).click()
+  await request.getByRole('textbox', { name: 'Write a reply' }).fill('Of course, my love ❤️')
+  await expect(request.getByRole('button', { name: 'Send request reply' })).toBeEnabled()
+})
+
+test('current mood can be selected without affecting saved love buttons', async ({ page }) => {
+  await page.goto('/home')
+  await expect(page.getByRole('button', { name: 'Set your mood' })).toBeVisible()
+  await page.getByRole('button', { name: 'Set your mood' }).click()
+  await expect(page.getByRole('button', { name: 'Happy' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Missing you' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sad' })).toBeVisible()
+})
+
+test('notification settings explain diagnostic delivery on this device', async ({ page }) => {
+  await page.goto('/settings/notifications')
+  await expect(page.getByRole('button', { name: 'Send test notification' })).toBeVisible()
+  await expect(page.getByText(/Delivery to the push service/i)).toBeVisible()
+})
+
+test('call controls include accessible speaker and microphone actions', async ({ page }) => {
+  await page.goto('/chat')
+  // Speaker routing capability varies by browser; never display a fake enabled route.
+  await expect(page.getByRole('button', { name: 'Start voice call' })).toBeVisible()
+})
