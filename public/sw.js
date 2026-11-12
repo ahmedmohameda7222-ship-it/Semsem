@@ -64,7 +64,7 @@ self.addEventListener('push', (event) => {
         tag: id,
         renotify: false,
         icon: '/icons/192.png',
-        data: data.call ? { call: id } : { entry: id },
+        data: data.test ? { test: true } : data.call ? { call: id } : { entry: id },
       })
     })(),
   )
@@ -74,8 +74,9 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const { call, entry } = event.notification.data || {}
   const id = call || entry
-  if (!/^[0-9a-f-]{36}$/i.test(id ?? '')) return
-  const path = '/chat?' + (call ? 'call=' : 'entry=') + encodeURIComponent(id)
+  const test = event.notification.data?.test
+  if (!test && !/^[0-9a-f-]{36}$/i.test(id ?? '')) return
+  const path = test ? '/settings/notifications' : '/chat?' + (call ? 'call=' : 'entry=') + encodeURIComponent(id)
   event.waitUntil(
     (async () => {
       for (const client of await self.clients.matchAll({ type: 'window' })) {
