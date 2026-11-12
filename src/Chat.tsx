@@ -7,6 +7,7 @@ import { LoveIcon } from './Attention'
 import { Avatar, ErrorMessage, useAction } from './ui'
 
 const pageSize = 30
+let typingChannelCleanup = Promise.resolve()
 const reactionOptions = ['❤️', '🥰', '😂', '✨']
 const replies = [
   ['On my way ♡', 'On my way, love ♡'],
@@ -50,6 +51,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
 
   useEffect(() => {
     let active = true
+    let subscribed = false
     const live = new Map<string, Entry>()
     const validTarget =
       target && /^[0-9a-f-]{36}$/i.test(target) ? target : null
@@ -113,7 +115,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
         ])
     }
     const channel = db
-      .channel('chat-entries')
+      .channel('chat-entries:' + crypto.randomUUID())
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_entries' },
@@ -151,28 +153,49 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
         },
       )
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') void load()
+        subscribed = status === 'SUBSCRIBED'
+        if (subscribed) void load()
       })
-    const presenceKey = crypto.randomUUID()
-    const typingChannel = db
-      .channel('our-space:typing', {
-        config: { private: true, presence: { key: presenceKey } },
-      })
-      .on('presence', { event: 'sync' }, () =>
-        setTyping(
-          Object.entries(typingChannel.presenceState()).some(
-            ([key]) => key !== presenceKey,
-          ),
-        ),
-      )
-      .subscribe()
-    presence.current = typingChannel
+    void typingChannelCleanup.then(() => {
+      if (!active) return
+      const presenceKey = crypto.randomUUID()
+      const typingChannel = db
+        .channel('our-space:typing', {
+          config: { private: true, presence: { key: presenceKey } },
+        })
+        .on('presence', { event: 'sync' }, () => {
+          if (active) {
+            setTyping(
+              Object.keys(typingChannel.presenceState()).some(
+                (key) => key !== presenceKey,
+              ),
+            )
+          }
+        })
+        .subscribe()
+      presence.current = typingChannel
+    })
+    const reloadVisible = () => {
+      if (!document.hidden) void load()
+    }
+    const fallback = setInterval(() => {
+      if (!subscribed) reloadVisible()
+    }, 5000)
+    document.addEventListener('visibilitychange', reloadVisible)
     void load()
     return () => {
       active = false
       clearTimeout(typingTimer.current)
+      clearInterval(fallback)
+      document.removeEventListener('visibilitychange', reloadVisible)
+      const typingChannel = presence.current
       presence.current = null
-      void db.removeChannel(typingChannel)
+      if (typingChannel) {
+        typingChannelCleanup = db.removeChannel(typingChannel).then(
+          () => {},
+          () => {},
+        )
+      }
       void db.removeChannel(channel)
     }
   }, [target, attempt])
@@ -466,13 +489,11 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
                             )
                           else
                             unwrap(
-                              await db
-                                .from('message_reactions')
-                                .insert({
-                                  entry_id: entry.id,
-                                  user_id: me.id,
-                                  reaction,
-                                }),
+                              await db.from('message_reactions').insert({
+                                entry_id: entry.id,
+                                user_id: me.id,
+                                reaction,
+                              }),
                             )
                           setReactions((current) => [
                             ...current.filter(
