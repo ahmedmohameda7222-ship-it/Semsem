@@ -743,11 +743,14 @@ test('daily messages send normal chat content only after explicit confirmation',
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })
 
-test('custom daily and private cards are shared and private sends retain redaction', async ({ page }) => {
+test('custom daily and private cards are visible only to their owner', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  const saved: Record<string, unknown>[] = []
+  const saved: Record<string, unknown>[] = [
+    { id: 'her-daily', author_id: second, kind: 'daily', category: 'daily', title: 'Her personal daily card', message: 'Only Sama can use this' },
+    { id: 'her-private', author_id: second, kind: 'intimate', category: 'direct', title: 'Her private request', message: 'Only Sama can use this' },
+  ]
   let customPrivate: Record<string, unknown> | undefined
-  await page.route('**/rest/v1/shared_cards?**', async (route) => {
+  await page.route('**/rest/v1/shared_cards*', async (route) => {
     if (route.request().method() === 'POST') {
       const post = route.request().postDataJSON()
       const row = { ...(Array.isArray(post) ? post[0] : post), id: 'custom-' + saved.length, author_id: first }
@@ -763,6 +766,8 @@ test('custom daily and private cards are shared and private sends retain redacti
   })
   await page.goto('/home')
   const daily = page.getByRole('region', { name: 'Daily Love Notes' })
+  await expect(daily.getByRole('button', { name: 'Her personal daily card' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Her private request' })).toHaveCount(0)
   await daily.getByRole('button', { name: 'Add your own daily note' }).click()
   const editor = page.getByRole('dialog', { name: 'Add daily love note' })
   await editor.getByRole('textbox', { name: 'Card title' }).fill('My everyday love')

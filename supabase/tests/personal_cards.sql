@@ -32,14 +32,21 @@ begin
     raise exception 'Retry overwrote request' using errcode='ZX302';
   exception when sqlstate 'ZX302' then raise; when others then null; end;
   perform set_config('request.jwt.claim.sub',semsem::text,true);
-  if not exists(select 1 from public.shared_cards where id=card_id)
-    then raise exception 'Partner cannot see shared note'; end if;
+  if exists(select 1 from public.shared_cards where id=card_id)
+    then raise exception 'Partner can read someone else''s private card' using errcode='ZX304'; end if;
   delete from public.shared_cards where id=card_id;
+  perform set_config('request.jwt.claim.sub',sasa::text,true);
   if not exists(select 1 from public.shared_cards where id=card_id)
     then raise exception 'Partner deleted someone else''s note'; end if;
+  perform set_config('request.jwt.claim.sub',semsem::text,true);
+  insert into public.shared_cards(kind,category,title,message)
+    values ('intimate','romantic','My own card','For my eyes only');
+  perform set_config('request.jwt.claim.sub',sasa::text,true);
+  if exists(select 1 from public.shared_cards where title='My own card')
+    then raise exception 'Other partner''s private card is visible' using errcode='ZX305'; end if;
   perform set_config('request.jwt.claim.sub',outsider::text,true);
   if exists(select 1 from public.shared_cards where id=card_id)
     or exists(select 1 from public.chat_entries where id=request_id)
     then raise exception 'Outsider can read pair data'; end if;
 end $check$;
-select 'PASS: paired shared cards, private sender, outsider denial and idempotency' as result;
+select 'PASS: owner-only private cards, secure sends, outsider denial and idempotency' as result;
