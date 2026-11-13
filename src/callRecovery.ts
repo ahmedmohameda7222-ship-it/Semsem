@@ -19,6 +19,7 @@ type RouteRow = {
   state?: string
   selectedCandidatePairId?: string
   localCandidateId?: string
+  remoteCandidateId?: string
   candidateType?: string
 }
 
@@ -35,7 +36,9 @@ export function selectedAudioRoute(rows: Iterable<RouteRow>): string {
     row.state === 'succeeded' && row.nominated)
   if (!pair?.localCandidateId) return 'Audio route connected'
   const candidate = byId.get(pair.localCandidateId)
-  if (candidate?.candidateType === 'relay') return 'TURN relay route'
+  const remote = byId.get(pair.remoteCandidateId)
+  if (candidate?.candidateType === 'relay' || remote?.candidateType === 'relay')
+    return 'TURN relay route'
   if (['host','srflx','prflx'].includes(candidate?.candidateType ?? ''))
     return 'Direct peer-to-peer route'
   return 'Audio route connected'
