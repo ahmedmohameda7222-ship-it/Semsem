@@ -456,6 +456,19 @@ export function VoiceCallProvider({
       pendingRemoteIce.current = []
       seenRemoteIce.current.clear()
       try {
+        // The answering phone also needs fresh TURN tokens after a network
+        // switch or a long call; otherwise a renewed caller relay cannot help.
+        try {
+          const freshIce = await requestVoice('ice')
+          if (active.current?.id === id && freshIce.relay) {
+            connection.setConfiguration({
+              ...connection.getConfiguration(),
+              iceServers: freshIce.iceServers,
+            })
+            setRelayAvailable(true)
+          }
+        } catch { /* use the current ICE servers */ }
+        if (active.current?.id !== id) return
         await connection.setRemoteDescription({
           type: 'offer', sdp: invite.recovery_offer,
         })
