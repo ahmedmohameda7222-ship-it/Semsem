@@ -260,6 +260,15 @@ export function VoiceCallProvider({
     setNetworkStatus(relay ? 'Secure relay ready' : 'Direct network connection only')
     const connection = new RTCPeerConnection({ iceServers, iceTransportPolicy: 'all' })
     peer.current = connection
+    connection.onicecandidate = (event) => {
+      if (!event.candidate || active.current?.id !== id) return
+      const encoded = normalizeCandidate(
+        event.candidate.toJSON() as Record<string, unknown>,
+      )
+      if (!encoded) return
+      pendingLocalIce.current.push(encoded)
+      scheduleLocalIce(id)
+    }
     stream.getTracks().forEach((track) => connection.addTrack(track, stream))
     connection.ontrack = ({ streams, track }) => {
       if (!playback.current || active.current?.id !== id) return
@@ -288,17 +297,18 @@ export function VoiceCallProvider({
         arm(id, 18000, 'The connection was lost.')
       }
     }
-    if (offer)
+    if (offer) {
       await connection.setRemoteDescription({ type: 'offer', sdp: offer })
-    await connection.setLocalDescription(
-      offer ? await connection.createAnswer() : await connection.createOffer(),
-    )
-    await gatherIce(connection)
-    const sdp = connection.localDescription?.sdp
-    if (!sdp || active.current?.id !== id) return
-    if (!/^a=candidate:/m.test(sdp)) {
-      throw new Error('The network did not provide an audio route. Try mobile data or another Wi-Fi.')
+      queueRemoteIce(id, current.remoteCandidates ?? [])
     }
+    // Trickle ICE: the SDP is sent immediately. Candidates continue arriving
+    // asynchronously, including TURN relay candidates on restrictive networks.
+    const localDescription = offer
+      ? await connection.createAnswer()
+      : await connection.createOffer()
+    await connection.setLocalDescription(localDescription)
+    const sdp = localDescription.sdp
+    if (!sdp || active.current?.id !== id) return
     if (offer) {
       const invite = await transition(id, 'answer', sdp)
       if (active.current?.id !== id) return
@@ -306,6 +316,8 @@ export function VoiceCallProvider({
         handler.current(invite)
         return
       }
+      localIceReady.current = true
+      scheduleLocalIce(id, 0)
       if (startedAt.current === undefined)
         arm(id, 35000, 'The connection could not be established. Try changing Wi-Fi or using mobile data.')
     } else {
@@ -320,6 +332,8 @@ export function VoiceCallProvider({
         handler.current(invite)
         return
       }
+      localIceReady.current = true
+      scheduleLocalIce(id, 0)
       arm(
         id,
         Date.parse(invite.expires_at) - Date.now() + 300,
@@ -377,7 +391,10 @@ export function VoiceCallProvider({
       const expires = Date.parse(invite.expires_at)
       setMessage('')
       setMinimized(false)
-      show({ id: invite.id, state: 'incoming', offer: invite.offer, expires })
+      show({
+        id: invite.id, state: 'incoming', offer: invite.offer, expires,
+        remoteCandidates: invite.caller_candidates ?? [],
+      })
       arm(invite.id, expires - Date.now() + 300, 'Missed voice call.', 'expire')
     } else if (
       current?.id === invite.id &&
@@ -392,6 +409,7 @@ export function VoiceCallProvider({
       arm(invite.id, 30000, 'The connection could not be established.')
       void peer.current
         .setRemoteDescription({ type: 'answer', sdp: invite.answer })
+        .then(() => flushRemoteIce(invite.id))
         .catch(() => {
           if (active.current?.id === invite.id)
             end('The connection could not be established.')
@@ -415,6 +433,16 @@ export function VoiceCallProvider({
               : 'Missed voice call.',
         )
       }
+    }
+    // Realtime sends full row snapshots. Apply each remote candidate exactly
+    // once, even if the fallback poll receives the same snapshot repeatedly.
+    if (active.current?.id === invite.id) {
+      queueRemoteIce(
+        invite.id,
+        invite.caller_id === me.id
+          ? invite.recipient_candidates ?? []
+          : invite.caller_candidates ?? [],
+      )
     }
   }
 
@@ -460,7 +488,7 @@ export function VoiceCallProvider({
     void refresh()
     const poll = setInterval(() => {
       if (!document.hidden || active.current) void refresh()
-    }, 3500)
+    }, 1500)
     window.addEventListener('focus', refresh)
     return () => {
       alive = false
