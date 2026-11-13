@@ -10,12 +10,13 @@ export type SharedCard = {
   message: string
 }
 
-export async function loadSharedCards(kind: SharedCardKind): Promise<SharedCard[]> {
+export async function loadSharedCards(kind: SharedCardKind, ownerId: string): Promise<SharedCard[]> {
   const data = unwrap(await db.from('shared_cards')
     .select('id,author_id,kind,category,title,message')
     .eq('kind', kind)
+    .eq('author_id', ownerId)
     .order('created_at', { ascending: false }))
-  return (data ?? []) as SharedCard[]
+  return ((data ?? []) as SharedCard[]).filter((card) => card.author_id === ownerId && card.kind === kind)
 }
 
 export async function saveSharedCard(kind: SharedCardKind, category: string, title: string, message: string) {

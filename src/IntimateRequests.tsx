@@ -25,19 +25,19 @@ export function IntimateRequests({ me, partner }: { me: Profile; partner?: Profi
   const [customError, setCustomError] = useState('')
 
   async function refresh() {
-    const cards = await loadSharedCards('intimate')
+    const cards = await loadSharedCards('intimate', me.id)
     setCustomCards(cards)
     setCustomError('')
   }
   useEffect(() => {
     let active = true
-    void loadSharedCards('intimate')
+    void loadSharedCards('intimate', me.id)
       .then((cards) => { if (active) setCustomCards(cards) })
       .catch((failure) => {
         if (active) setCustomError(failure instanceof Error ? failure.message : 'Could not load saved requests.')
       })
     return () => { active = false }
-  }, [])
+  }, [me.id])
 
   useEffect(() => {
     if (!notice) return

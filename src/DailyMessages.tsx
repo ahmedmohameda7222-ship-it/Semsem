@@ -22,18 +22,18 @@ export function DailyMessages({ me, partner }: { me: Profile; partner?: Profile 
   const [notice, setNotice] = useState('')
 
   async function refresh() {
-    setCustomCards(await loadSharedCards('daily'))
+    setCustomCards(await loadSharedCards('daily', me.id))
     setCustomError('')
   }
   useEffect(() => {
     let active = true
-    void loadSharedCards('daily')
+    void loadSharedCards('daily', me.id)
       .then((cards) => { if (active) setCustomCards(cards) })
       .catch((failure) => {
         if (active) setCustomError(failure instanceof Error ? failure.message : 'Could not load saved notes.')
       })
     return () => { active = false }
-  }, [])
+  }, [me.id])
   useEffect(() => {
     if (!notice) return
     const timer = setTimeout(() => setNotice(''), 3500)
