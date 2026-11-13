@@ -49,6 +49,7 @@ import { db, flushPush, unwrap } from './data'
 import type { Milestone, Profile, Template } from './data'
 import { daysUntil, prettyDate } from './calendar'
 import { ErrorMessage, Field, Header, Page, useAction } from './ui'
+import { IntimateRequests } from './IntimateRequests'
 
 const catalog = {
   Love: {
@@ -341,6 +342,7 @@ export function Home({
           </div>
         ))}
       </div>
+      <IntimateRequests partner={partner} />
       {(pending || notice) && (
         <div className={'send-toast' + (!pending && notice ? ' success' : '')}>
           <span role={pending?.failed ? 'alert' : 'status'}>
