@@ -13,6 +13,14 @@ function shorten(text, limit) {
 
 export function pushPayload(job) {
   const sender = job.sender_nickname || 'Our Space'
+  // claim_push replaces private content before it reaches the push server.
+  // Defensive second layer: never reuse an arbitrary private body here.
+  if (job.title === 'Private Request')
+    return {
+      entry: job.event_id,
+      title: sender + ' ❤️‍🔥 · Private Request',
+      body: 'Open Our Space to view a private request.',
+    }
   return {
     entry: job.event_id,
     title: sender + ' ❤️' + (job.title ? ' · Attention Request' : ''),
