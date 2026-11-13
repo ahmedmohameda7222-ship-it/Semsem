@@ -107,5 +107,5 @@ export function formatTalkTime(seconds: number): string {
   const safe = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0))
   const hours = Math.floor(safe / 3600)
   const minutes = Math.floor((safe % 3600) / 60)
-  return hours ? hours + 'h ' + minutes + 'm' : minutes + 'm' + (safe < 60 ? 'in' : '')
+  return hours ? hours + 'h ' + minutes + 'm' : (safe < 60 ? '0 min' : minutes + 'm')
 }
