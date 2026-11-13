@@ -536,3 +536,64 @@ test('call controls include accessible speaker and microphone actions', async ({
   // Speaker routing capability varies by browser; never display a fake enabled route.
   await expect(page.getByRole('button', { name: 'Start voice call' })).toBeVisible()
 })
+
+
+test('outgoing call notifies partner immediately without waiting for ICE gathering', async ({ page }) => {
+  let createdAt = 0
+  let notifiedAt = 0
+  await page.addInitScript(() => {
+    class PeerWithoutGatherCompletion {
+      iceGatheringState = 'gathering'
+      iceConnectionState = 'checking'
+      connectionState = 'connecting'
+      localDescription: RTCSessionDescriptionInit | null = null
+      remoteDescription: RTCSessionDescriptionInit | null = null
+      addTrack() {}
+      async createOffer() { return { type: 'offer' as const, sdp: 'v=0\\r\\na=ice-options:trickle\\r\\n' } }
+      async setLocalDescription(value: RTCSessionDescriptionInit) { this.localDescription = value }
+      addEventListener() {}
+      removeEventListener() {}
+      close() {}
+    }
+    Object.defineProperty(window, 'RTCPeerConnection', {
+      configurable: true, value: PeerWithoutGatherCompletion,
+    })
+  })
+  await page.route('**/api/voice', (route) => {
+    const action = route.request().postDataJSON().action
+    if (action === 'ice') return route.fulfill({ json: {
+      iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
+      relay: false, turnStatus: 'network_error',
+    } })
+    if (action === 'notify') {
+      notifiedAt = Date.now()
+      return route.fulfill({ json: { accepted: 1, attempted: 1 } })
+    }
+    return route.fulfill({ status: 400 })
+  })
+  await page.route('**/rest/v1/rpc/start_voice', (route) => {
+    createdAt = Date.now()
+    const data = route.request().postDataJSON()
+    expect(data.offer_sdp).toContain('v=0')
+    return route.fulfill({ json: {
+      id: data.call_id,
+      caller_id: first,
+      recipient_id: second,
+      status: 'ringing',
+      offer: data.offer_sdp,
+      answer: null,
+      expires_at: new Date(Date.now() + 45000).toISOString(),
+      caller_candidates: [], recipient_candidates: [],
+    } })
+  })
+  await page.route('**/rest/v1/rpc/push_voice_candidates', (route) =>
+    route.fulfill({ json: null }),
+  )
+  await page.goto('/chat')
+  const started = Date.now()
+  await page.getByRole('button', { name: 'Start voice call' }).click()
+  await expect.poll(() => createdAt, { timeout: 4500 }).toBeGreaterThan(0)
+  await expect.poll(() => notifiedAt, { timeout: 4500 }).toBeGreaterThan(0)
+  expect(createdAt - started).toBeLessThan(4000)
+  expect(notifiedAt - createdAt).toBeLessThan(2200)
+})
