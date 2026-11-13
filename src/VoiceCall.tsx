@@ -804,7 +804,7 @@ export function VoiceCallProvider({
                 {weakConnection}
               </p>
             )}
-            {audioRoute && <p className="hint" role="status">{audioRoute}</p>
+            {audioRoute && <p className="hint" role="status">{audioRoute}</p>}
             {playbackBlocked && (
               <button
                 className="outline"
