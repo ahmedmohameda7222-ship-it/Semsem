@@ -597,3 +597,63 @@ test('outgoing call notifies partner immediately without waiting for ICE gatheri
   expect(createdAt - started).toBeLessThan(4000)
   expect(notifiedAt - createdAt).toBeLessThan(2200)
 })
+
+
+test('answer is acknowledged without waiting for all TURN ICE candidates', async ({ page }) => {
+  const inviteId = 'c0d3e471-a3aa-4b9d-a3d1-e279d8cf4a60'
+  let answeredAt = 0
+  await page.addInitScript(() => {
+    class PeerWithoutGatherCompletion {
+      iceGatheringState = 'gathering'
+      iceConnectionState = 'checking'
+      connectionState = 'connecting'
+      localDescription: RTCSessionDescriptionInit | null = null
+      remoteDescription: RTCSessionDescriptionInit | null = null
+      onicecandidate: ((event: { candidate: null }) => void) | null = null
+      addTrack() {}
+      async setRemoteDescription(value: RTCSessionDescriptionInit) { this.remoteDescription = value }
+      async createAnswer() { return { type: 'answer' as const, sdp: 'v=0\\r\\na=ice-options:trickle\\r\\n' } }
+      async setLocalDescription(value: RTCSessionDescriptionInit) { this.localDescription = value }
+      async addIceCandidate() {}
+      addEventListener() {}
+      removeEventListener() {}
+      close() {}
+    }
+    Object.defineProperty(window, 'RTCPeerConnection', {
+      configurable: true, value: PeerWithoutGatherCompletion,
+    })
+  })
+  await page.route('**/api/voice', (route) => route.fulfill({ json: {
+    iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
+    relay: false, turnStatus: 'network_error',
+  } }))
+  await page.route('**/rest/v1/voice_calls?**', (route) => route.fulfill({ json: {
+    id: inviteId, caller_id: second, recipient_id: first,
+    status: 'ringing', offer: 'v=0\\r\\na=ice-options:trickle\\r\\n',
+    answer: null, caller_candidates: [], recipient_candidates: [],
+    expires_at: new Date(Date.now() + 45000).toISOString(),
+  } }))
+  await page.route('**/rest/v1/rpc/change_voice', (route) => {
+    const data = route.request().postDataJSON()
+    if (data.operation === 'answer') {
+      answeredAt = Date.now()
+      expect(data.answer_sdp).toContain('v=0')
+    }
+    return route.fulfill({ json: {
+      id: inviteId, caller_id: second, recipient_id: first,
+      status: data.operation === 'answer' ? 'answered' : 'ended',
+      offer: 'v=0', answer: data.answer_sdp ?? null,
+      expires_at: new Date(Date.now() + 75000).toISOString(),
+    } })
+  })
+  await page.route('**/rest/v1/rpc/push_voice_candidates', (route) =>
+    route.fulfill({ json: null }),
+  )
+  await page.goto('/chat?call=' + inviteId)
+  const screen = page.getByRole('region', { name: 'Incoming Voice Call' })
+  await expect(screen.getByRole('button', { name: 'Answer' })).toBeVisible()
+  const tapped = Date.now()
+  await screen.getByRole('button', { name: 'Answer' }).click()
+  await expect.poll(() => answeredAt, { timeout: 4500 }).toBeGreaterThan(0)
+  expect(answeredAt - tapped).toBeLessThan(4000)
+})
