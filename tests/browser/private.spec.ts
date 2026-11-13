@@ -594,8 +594,9 @@ test('outgoing call notifies partner immediately without waiting for ICE gatheri
       caller_candidates: [], recipient_candidates: [],
     } })
   })
-  await page.route('**/rest/v1/rpc/push_voice_candidates', (route) => {
+  await page.route('**/rest/v1/rpc/push_voice_candidates_v2', (route) => {
     const payload = route.request().postDataJSON()
+    expect(payload.expected_seq).toBe(0)
     expect(payload.candidate_list[0].candidate).toContain('candidate:1')
     trickled += payload.candidate_list.length
     return route.fulfill({ json: null })
