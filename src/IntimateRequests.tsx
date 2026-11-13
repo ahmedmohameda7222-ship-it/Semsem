@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import { ChevronRight, Heart, LockKeyhole, Send, X } from 'lucide-react'
 import { db, flushPush, unwrap } from './data'
-import { LoveIcon } from './Attention'
 import type { Profile } from './data'
 import { intimateCategories, intimateRequests } from './intimateRequests'
 import type { IntimateCategory, IntimateRequest } from './intimateRequests'
@@ -47,7 +47,7 @@ export function IntimateRequests({ partner }: { partner?: Profile }) {
     setError('')
   }
 
-  async function send(event: React.FormEvent<HTMLFormElement>) {
+  async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selected || busy) return
     const content = message.trim()
@@ -114,7 +114,7 @@ export function IntimateRequests({ partner }: { partner?: Profile }) {
             onClick={() => choose(request)}
           >
             <span className="intimate-request-icon">
-              <LoveIcon icon={request.icon} size="big" />
+              <span className="intimate-request-emoji" aria-hidden="true">{request.emoji}</span>
             </span>
             <strong>{request.title}</strong>
             <span className="intimate-tap">
@@ -138,7 +138,6 @@ export function IntimateRequests({ partner }: { partner?: Profile }) {
             role="dialog"
             aria-modal="true"
             aria-label="Private intimate request"
-            aria-labelledby="intimate-compose-title"
             className="intimate-compose"
           >
             <div className="row spread intimate-compose-top">
