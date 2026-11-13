@@ -331,11 +331,10 @@ export function VoiceCallProvider({
     setNetworkStatus('Restoring the audio path…')
     try {
       if (current.id && current.id === id && current.state !== 'incoming') {
-        if (me.id === partner?.id) return
         // The original caller is the sole restart-offer author to avoid SDP glare.
         const invite = unwrap(await db.from('voice_calls').select('caller_id').eq('id', id).single())
         if (active.current?.id !== id) return
-        if (invite.caller_id === me.id) {
+        if (invite?.caller_id === me.id) {
           const oldSeq = recoverySeq.current
           const description = await connection.createOffer({ iceRestart: true })
           if (!description.sdp || active.current?.id !== id) return
@@ -358,7 +357,7 @@ export function VoiceCallProvider({
         }
       }
     } catch {
-      if (active.current?.id === id && connection.signalingState === 'have-local-offer') {
+      if (active.current?.id === id && ['have-local-offer'].includes(connection.signalingState)) {
         try { await connection.setLocalDescription({ type: 'rollback' }) } catch { /* best effort */ }
         localIceReady.current = true
       }
