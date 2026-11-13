@@ -24,12 +24,12 @@ begin
   result := public.recover_voice(call_id,'request');
   if result.recovery_requested_at is null then raise exception 'Request not persisted'; end if;
   perform set_config('request.jwt.claim.sub',sasa::text,true);
-  result := public.recover_voice(call_id,'offer','restart SDP offer',0);
-  if result.recovery_seq<>1 or result.recovery_offer<>'restart SDP offer'
+  result := public.recover_voice(call_id,'offer',E'v=0\r\na=ice-ufrag:xyz\r\n',0);
+  if result.recovery_seq<>1 or result.recovery_offer is distinct from E'v=0\r\na=ice-ufrag:xyz\r\n'
      or result.recovery_answer is not null then raise exception 'ICE restart offer failed'; end if;
   perform set_config('request.jwt.claim.sub',semsem::text,true);
-  result := public.recover_voice(call_id,'answer','restart SDP answer',1);
-  if result.recovery_answer<>'restart SDP answer' then raise exception 'ICE restart answer failed'; end if;
+  result := public.recover_voice(call_id,'answer',E'v=0\r\na=ice-ufrag:reply\r\n',1);
+  if result.recovery_answer is distinct from E'v=0\r\na=ice-ufrag:reply\r\n' then raise exception 'ICE restart answer failed'; end if;
   begin
     perform public.recover_voice(call_id,'answer','stale SDP answer',0);
     raise exception 'Stale ICE answer was accepted' using errcode='ZR302';
