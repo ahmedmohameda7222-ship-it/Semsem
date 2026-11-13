@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ChevronLeft, Clock3, Search, Send, SmilePlus, Star, X } from 'lucide-react'
+import { ChevronLeft, Clock3, LockKeyhole, Search, Send, SmilePlus, Star, X } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { db, flushPush, unwrap } from './data'
 import type { Entry, Profile, Reaction } from './data'
@@ -719,6 +719,11 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
                             ' sent a request'}
                       </div>
                       <h4>{entry.title}</h4>
+                      {entry.is_private && (
+                        <span className="chat-private-tag">
+                          <LockKeyhole size={12} /> Private · just for us
+                        </span>
+                      )}
                     </div>
                     {mine && entry.read_at && (
                       <span className="request-status">✓✓ Seen</span>
