@@ -50,6 +50,7 @@ import type { Milestone, Profile, Template } from './data'
 import { daysUntil, prettyDate } from './calendar'
 import { ErrorMessage, Field, Header, Page, useAction } from './ui'
 import { IntimateRequests } from './IntimateRequests'
+import { DailyMessages } from './DailyMessages'
 
 const catalog = {
   Love: {
@@ -342,7 +343,8 @@ export function Home({
           </div>
         ))}
       </div>
-      <IntimateRequests partner={partner} />
+      <DailyMessages me={me} partner={partner} />
+      <IntimateRequests me={me} partner={partner} />
       {(pending || notice) && (
         <div className={'send-toast' + (!pending && notice ? ' success' : '')}>
           <span role={pending?.failed ? 'alert' : 'status'}>
