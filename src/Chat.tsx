@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ChevronLeft, Search, Send, SmilePlus, Star, X } from 'lucide-react'
+import { ChevronLeft, Clock3, Search, Send, SmilePlus, Star, X } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { db, flushPush, unwrap } from './data'
 import type { Entry, Profile, Reaction } from './data'
@@ -10,6 +10,7 @@ import type { LibraryMode } from './ChatLibrary'
 import { reactionOptions } from './chatOptions'
 import { ChatAttachments, PrivateMedia } from './Media'
 import { VoiceCallButton } from './VoiceCall'
+import { CallHistory } from './CallHistory'
 
 const pageSize = 30
 let typingChannelCleanup = Promise.resolve()
@@ -39,6 +40,7 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
   }>()
   const [reactionFor, setReactionFor] = useState<string>()
   const [library, setLibrary] = useState<LibraryMode>()
+  const [callHistory, setCallHistory] = useState(false)
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [favoriteRevision, setFavoriteRevision] = useState(0)
   const [highlight, setHighlight] = useState<string>()
@@ -461,12 +463,13 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
           </h3>
           <p>Our private conversation</p>
         </div>
+        <div className="chat-head-tools">
         <button
           className="chat-action"
           aria-label="Search chat"
           aria-expanded={library === 'search'}
           onClick={() =>
-            setLibrary(library === 'search' ? undefined : 'search')
+            (setCallHistory(false), setLibrary(library === 'search' ? undefined : 'search'))
           }
         >
           <Search size={19} />
@@ -476,13 +479,33 @@ export function Chat({ me, partner }: { me: Profile; partner?: Profile }) {
           aria-label="Favorites"
           aria-expanded={library === 'favorites'}
           onClick={() =>
-            setLibrary(library === 'favorites' ? undefined : 'favorites')
+            (setCallHistory(false), setLibrary(library === 'favorites' ? undefined : 'favorites'))
           }
         >
           <Star size={19} />
         </button>
+        <button
+          className="chat-action"
+          type="button"
+          aria-label="Call history"
+          aria-expanded={callHistory}
+          onClick={() => {
+            setLibrary(undefined)
+            setCallHistory((open) => !open)
+          }}
+        >
+          <Clock3 size={19} />
+        </button>
         {partner && <VoiceCallButton />}
+        </div>
       </div>
+      {callHistory && partner && (
+        <CallHistory
+          me={me.id}
+          partner={partner.nickname}
+          close={() => setCallHistory(false)}
+        />
+      )}
       {library && (
         <ChatLibrary
           key={library}

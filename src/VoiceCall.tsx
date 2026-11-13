@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { db, unwrap } from './data'
 import type { Profile } from './data'
 import { formatElapsed } from './elapsed'
+import { extractAudioQuality, NetworkQualityWatch } from './callQuality'
 import { Avatar } from './ui'
 import { turnStatusMessage } from './callNetwork'
 import { normalizeCandidate, unseenCandidates } from './iceSignaling'
@@ -89,6 +90,7 @@ export function VoiceCallProvider({
   const [turnStatus, setTurnStatus] = useState<string | null>(null)
   const [networkStatus, setNetworkStatus] = useState('')
   const [audioRoute, setAudioRoute] = useState('')
+  const [weakConnection, setWeakConnection] = useState('')
 
   const active = useRef<Call | undefined>(undefined)
   const peer = useRef<RTCPeerConnection | null>(null)
@@ -99,6 +101,10 @@ export function VoiceCallProvider({
   const appliedAnswer = useRef<string | undefined>(undefined)
   const locallyEnded = useRef(new Set<string>())
   const audioContext = useRef<AudioContext | null>(null)
+  const qualityTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+  const warningTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const qualityWatch = useRef(new NetworkQualityWatch())
+  const connectedRecorded = useRef<string | undefined>(undefined)
   const handler = useRef<(invite: Invite) => void>(() => {})
   const endOnUnmount = useRef<() => void>(() => {})
   // Local candidates are buffered until the call invitation/answer is committed.
@@ -119,6 +125,10 @@ export function VoiceCallProvider({
   function release() {
     clearTimeout(timeout.current)
     clearTimeout(localIceTimer.current)
+    clearInterval(qualityTimer.current)
+    clearTimeout(warningTimer.current)
+    qualityWatch.current = new NetworkQualityWatch()
+    connectedRecorded.current = undefined
     pendingLocalIce.current = []
     localIceReady.current = false
     localIceFlushing.current = false
@@ -144,7 +154,56 @@ export function VoiceCallProvider({
     setTurnStatus(null)
     setNetworkStatus('')
     setAudioRoute('')
+    setWeakConnection('')
     show(undefined)
+  }
+
+  function warnConnection(id: string, issue: string) {
+    if (active.current?.id !== id) return
+    setWeakConnection(issue)
+    clearTimeout(warningTimer.current)
+    warningTimer.current = setTimeout(() => {
+      if (active.current?.id === id) setWeakConnection('')
+    }, 5200)
+    const audio = audioContext.current
+    if (!audio || audio.state !== 'running' || document.hidden) return
+    // Two original, short alert tones, quiet enough not to mask conversation.
+    for (const [offset, pitch] of [[0, 660], [0.19, 520]]) {
+      const start = audio.currentTime + offset
+      const oscillator = audio.createOscillator()
+      const gain = audio.createGain()
+      oscillator.type = 'sine'
+      oscillator.frequency.value = pitch
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.exponentialRampToValueAtTime(0.045, start + 0.025)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.15)
+      oscillator.connect(gain).connect(audio.destination)
+      oscillator.onended = () => {
+        oscillator.disconnect()
+        gain.disconnect()
+      }
+      oscillator.start(start)
+      oscillator.stop(start + 0.16)
+    }
+  }
+
+  function monitorQuality(id: string, connection: RTCPeerConnection) {
+    clearInterval(qualityTimer.current)
+    qualityWatch.current = new NetworkQualityWatch()
+    qualityTimer.current = setInterval(() => {
+      if (active.current?.id !== id || connection.connectionState !== 'connected') return
+      void connection.getStats().then((report) => {
+        if (active.current?.id !== id || connection.connectionState !== 'connected') return
+        const rows: Array<Parameters<typeof extractAudioQuality>[0] extends Iterable<infer T> ? T : never> = []
+        report.forEach((item) => {
+          rows.push(item as unknown as (typeof rows)[number])
+        })
+        if (qualityWatch.current.sample(extractAudioQuality(rows), Date.now()))
+          warnConnection(id, 'Weak connection · Your voice may break up.')
+      }).catch(() => {
+        // Stats are optional across Safari versions; never interrupt a call.
+      })
+    }, 3500)
   }
 
   // Use durable authorized database signaling, with Realtime updates and
@@ -290,10 +349,20 @@ export function VoiceCallProvider({
         startedAt.current ??= Date.now()
         setStarted(startedAt.current)
         show({ id, state: 'connected' })
+        if (connectedRecorded.current !== id) {
+          void db.rpc('mark_voice_connected', { call_id: id })
+            .then(({ error }) => {
+              if (!error && active.current?.id === id)
+                connectedRecorded.current = id
+            }, () => {})
+        }
+        monitorQuality(id, connection)
       } else if (connection.connectionState === 'failed') {
         end('The connection failed. Try calling again.')
       } else if (connection.connectionState === 'disconnected') {
         show({ id, state: 'connecting' })
+        if (qualityWatch.current.disconnected(Date.now()))
+          warnConnection(id, 'Connection interrupted · Reconnecting…')
         arm(id, 18000, 'The connection was lost.')
       }
     }
@@ -728,6 +797,11 @@ export function VoiceCallProvider({
             {call?.state === 'connecting' && relayAvailable === false && (
               <p className="hint call-turn-diagnostic" role="status">
                 {turnStatusMessage(turnStatus)}
+              </p>
+            )}
+            {weakConnection && (
+              <p className="call-weak-network" role="status" aria-live="polite">
+                {weakConnection}
               </p>
             )}
             {audioRoute && <p className="hint" role="status">{audioRoute}</p>}
