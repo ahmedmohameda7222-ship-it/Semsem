@@ -720,3 +720,65 @@ test('intimate requests are opt-in, editable, private, and responsive on iPhones
     await page.screenshot({ path: info.outputPath('intimate-requests-' + width + '.png') })
   }
 })
+
+test('daily messages send normal chat content only after explicit confirmation', async ({ page }) => {
+  let sent: { entry?: string; content?: string; button?: string } | undefined
+  await page.route('**/rest/v1/rpc/send_chat', (route) => {
+    sent = route.request().postDataJSON()
+    return route.fulfill({ json: sent?.entry ?? null })
+  })
+  await page.setViewportSize({ width: 320, height: 780 })
+  await page.goto('/home')
+  await expect(page.getByText('Little sparks, private moments. Share a feeling — never an obligation.')).toHaveCount(0)
+  const daily = page.getByRole('region', { name: 'Daily Love Notes' })
+  await expect(daily).toBeVisible()
+  await daily.getByRole('button', { name: /I love you/i }).first().click()
+  const dialog = page.getByRole('dialog', { name: 'Daily love note' })
+  await expect(dialog).toBeVisible()
+  expect(sent).toBeUndefined()
+  await dialog.getByRole('textbox', { name: 'Your message' }).fill('Thinking about you all day, my love ❤️')
+  await dialog.getByRole('button', { name: 'Send daily love note' }).click()
+  await expect.poll(() => sent?.content).toBe('Thinking about you all day, my love ❤️')
+  expect(sent?.button).toBeUndefined()
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+})
+
+test('custom daily and private cards are shared and private sends retain redaction', async ({ page }) => {
+  const saved: Record<string, unknown>[] = []
+  let customPrivate: Record<string, unknown> | undefined
+  await page.route('**/rest/v1/shared_cards?**', async (route) => {
+    if (route.request().method() === 'POST') {
+      const post = route.request().postDataJSON()
+      const row = { ...(Array.isArray(post) ? post[0] : post), id: 'custom-' + saved.length, author_id: first }
+      saved.push(row)
+      return route.fulfill({ status: 201, json: [] })
+    }
+    if (route.request().method() === 'DELETE') return route.fulfill({ status: 204 })
+    return route.fulfill({ json: saved })
+  })
+  await page.route('**/rest/v1/rpc/send_private_card', (route) => {
+    customPrivate = route.request().postDataJSON()
+    return route.fulfill({ json: customPrivate?.entry ?? null })
+  })
+  await page.goto('/home')
+  const daily = page.getByRole('region', { name: 'Daily Love Notes' })
+  await daily.getByRole('button', { name: 'Add your own daily note' }).click()
+  const editor = page.getByRole('dialog', { name: 'Add daily love note' })
+  await editor.getByRole('textbox', { name: 'Card title' }).fill('My everyday love')
+  await editor.getByRole('textbox', { name: 'Message to send' }).fill('You are my favorite person ❤️')
+  await editor.getByRole('button', { name: 'Save daily note' }).click()
+  await expect(daily.getByRole('button', { name: 'My everyday love' })).toBeVisible()
+
+  const privateCards = page.getByRole('region', { name: 'Intimate Requests' })
+  await privateCards.getByRole('button', { name: 'Add your own private request' }).click()
+  const privateEditor = page.getByRole('dialog', { name: 'Add private request' })
+  await privateEditor.getByRole('textbox', { name: 'Card title' }).fill('Our quiet evening')
+  await privateEditor.getByRole('textbox', { name: 'Message to send' }).fill('I want a night just for us ❤️')
+  await privateEditor.getByRole('button', { name: 'Save private request' }).click()
+  await privateCards.getByRole('button', { name: 'Our quiet evening' }).click()
+  const sendDialog = page.getByRole('dialog', { name: 'Private intimate request' })
+  await sendDialog.getByRole('button', { name: 'Send private request' }).click()
+  await expect.poll(() => customPrivate?.card_title).toBe('Our quiet evening')
+  await expect.poll(() => customPrivate?.card_message).toBe('I want a night just for us ❤️')
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+})
