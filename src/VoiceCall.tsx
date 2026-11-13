@@ -7,6 +7,8 @@ import type { Profile } from './data'
 import { formatElapsed } from './elapsed'
 import { Avatar } from './ui'
 import { turnStatusMessage } from './callNetwork'
+import { normalizeCandidate, unseenCandidates } from './iceSignaling'
+import type { SignalCandidate } from './iceSignaling'
 
 type Invite = {
   id: string
@@ -15,12 +17,15 @@ type Invite = {
   status: 'ringing' | 'answered' | 'declined' | 'cancelled' | 'missed' | 'ended'
   offer: string | null
   answer: string | null
+  caller_candidates?: SignalCandidate[]
+  recipient_candidates?: SignalCandidate[]
   expires_at: string
 }
 type Call = {
   id: string
   state: 'incoming' | 'calling' | 'connecting' | 'connected'
   offer?: string
+  remoteCandidates?: SignalCandidate[]
   expires?: number
 }
 const context = createContext<{ start: () => void; disabled: boolean } | null>(
@@ -45,24 +50,6 @@ async function requestVoice(action: 'ice' | 'notify', call?: string) {
   if (action === 'ice')
     return (await response.json()) as { iceServers: RTCIceServer[]; relay: boolean; turnStatus?: string }
   return { iceServers: [], relay: false }
-}
-
-function gatherIce(peer: RTCPeerConnection) {
-  if (peer.iceGatheringState === 'complete') return Promise.resolve()
-  return new Promise<void>((resolve) => {
-    const finish = () => {
-      clearTimeout(timer)
-      peer.removeEventListener('icegatheringstatechange', changed)
-      resolve()
-    }
-    const changed = () => {
-      if (peer.iceGatheringState === 'complete') finish()
-    }
-    // Across continents, TURN relay candidates may take longer than 8s.
-    // This is non-trickle signaling: offer/answer must include full ICE candidates.
-    const timer = setTimeout(finish, 20000)
-    peer.addEventListener('icegatheringstatechange', changed)
-  })
 }
 
 export function VoiceCallButton() {
@@ -114,6 +101,15 @@ export function VoiceCallProvider({
   const audioContext = useRef<AudioContext | null>(null)
   const handler = useRef<(invite: Invite) => void>(() => {})
   const endOnUnmount = useRef<() => void>(() => {})
+  // Local candidates are buffered until the call invitation/answer is committed.
+  const pendingLocalIce = useRef<SignalCandidate[]>([])
+  const localIceReady = useRef(false)
+  const localIceFlushing = useRef(false)
+  const localIceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const pendingRemoteIce = useRef<SignalCandidate[]>([])
+  const seenRemoteIce = useRef(new Set<string>())
+  const remoteIceFlushing = useRef(false)
+
 
   function show(next?: Call) {
     active.current = next
@@ -122,6 +118,13 @@ export function VoiceCallProvider({
 
   function release() {
     clearTimeout(timeout.current)
+    clearTimeout(localIceTimer.current)
+    pendingLocalIce.current = []
+    localIceReady.current = false
+    localIceFlushing.current = false
+    pendingRemoteIce.current = []
+    seenRemoteIce.current.clear()
+    remoteIceFlushing.current = false
     if (peer.current) {
       peer.current.onconnectionstatechange = null
       peer.current.ontrack = null
@@ -142,6 +145,66 @@ export function VoiceCallProvider({
     setNetworkStatus('')
     setAudioRoute('')
     show(undefined)
+  }
+
+  // Use durable authorized database signaling, with Realtime updates and
+  // periodic reads as fallbacks. Do not block ringing on candidate discovery.
+  function scheduleLocalIce(id: string, delay = 160) {
+    if (active.current?.id !== id || !localIceReady.current ||
+        localIceTimer.current || !pendingLocalIce.current.length) return
+    localIceTimer.current = setTimeout(() => {
+      localIceTimer.current = undefined
+      void flushLocalIce(id)
+    }, delay)
+  }
+
+  async function flushLocalIce(id: string) {
+    if (localIceFlushing.current || !localIceReady.current ||
+        active.current?.id !== id) return
+    localIceFlushing.current = true
+    let retry = false
+    try {
+      while (active.current?.id === id && localIceReady.current &&
+             pendingLocalIce.current.length) {
+        const batch = pendingLocalIce.current.slice(0, 10)
+        const { error } = await db.rpc('push_voice_candidates', {
+          call_id: id, candidate_list: batch,
+        })
+        if (error) { retry = true; break }
+        pendingLocalIce.current.splice(0, batch.length)
+      }
+    } finally {
+      localIceFlushing.current = false
+      scheduleLocalIce(id, retry ? 1200 : 160)
+    }
+  }
+
+  async function flushRemoteIce(id: string) {
+    const connection = peer.current
+    if (!connection || !connection.remoteDescription ||
+        remoteIceFlushing.current || active.current?.id !== id) return
+    remoteIceFlushing.current = true
+    try {
+      while (pendingRemoteIce.current.length && active.current?.id === id &&
+             peer.current === connection) {
+        const candidate = pendingRemoteIce.current.shift()!
+        try {
+          await connection.addIceCandidate(candidate)
+        } catch {
+          // ICE may reject a stale candidate after a network switch; continue.
+        }
+      }
+    } finally {
+      remoteIceFlushing.current = false
+    }
+  }
+
+  function queueRemoteIce(id: string, candidates: SignalCandidate[] = []) {
+    if (active.current?.id !== id || !Array.isArray(candidates)) return
+    pendingRemoteIce.current.push(
+      ...unseenCandidates(candidates, seenRemoteIce.current),
+    )
+    void flushRemoteIce(id)
   }
 
   async function transition(
@@ -197,6 +260,15 @@ export function VoiceCallProvider({
     setNetworkStatus(relay ? 'Secure relay ready' : 'Direct network connection only')
     const connection = new RTCPeerConnection({ iceServers, iceTransportPolicy: 'all' })
     peer.current = connection
+    connection.onicecandidate = (event) => {
+      if (!event.candidate || active.current?.id !== id) return
+      const encoded = normalizeCandidate(
+        event.candidate.toJSON() as Record<string, unknown>,
+      )
+      if (!encoded) return
+      pendingLocalIce.current.push(encoded)
+      scheduleLocalIce(id)
+    }
     stream.getTracks().forEach((track) => connection.addTrack(track, stream))
     connection.ontrack = ({ streams, track }) => {
       if (!playback.current || active.current?.id !== id) return
@@ -225,17 +297,18 @@ export function VoiceCallProvider({
         arm(id, 18000, 'The connection was lost.')
       }
     }
-    if (offer)
+    if (offer) {
       await connection.setRemoteDescription({ type: 'offer', sdp: offer })
-    await connection.setLocalDescription(
-      offer ? await connection.createAnswer() : await connection.createOffer(),
-    )
-    await gatherIce(connection)
-    const sdp = connection.localDescription?.sdp
-    if (!sdp || active.current?.id !== id) return
-    if (!/^a=candidate:/m.test(sdp)) {
-      throw new Error('The network did not provide an audio route. Try mobile data or another Wi-Fi.')
+      queueRemoteIce(id, current.remoteCandidates ?? [])
     }
+    // Trickle ICE: the SDP is sent immediately. Candidates continue arriving
+    // asynchronously, including TURN relay candidates on restrictive networks.
+    const localDescription = offer
+      ? await connection.createAnswer()
+      : await connection.createOffer()
+    await connection.setLocalDescription(localDescription)
+    const sdp = localDescription.sdp
+    if (!sdp || active.current?.id !== id) return
     if (offer) {
       const invite = await transition(id, 'answer', sdp)
       if (active.current?.id !== id) return
@@ -243,6 +316,8 @@ export function VoiceCallProvider({
         handler.current(invite)
         return
       }
+      localIceReady.current = true
+      scheduleLocalIce(id, 0)
       if (startedAt.current === undefined)
         arm(id, 35000, 'The connection could not be established. Try changing Wi-Fi or using mobile data.')
     } else {
@@ -257,6 +332,8 @@ export function VoiceCallProvider({
         handler.current(invite)
         return
       }
+      localIceReady.current = true
+      scheduleLocalIce(id, 0)
       arm(
         id,
         Date.parse(invite.expires_at) - Date.now() + 300,
@@ -314,7 +391,10 @@ export function VoiceCallProvider({
       const expires = Date.parse(invite.expires_at)
       setMessage('')
       setMinimized(false)
-      show({ id: invite.id, state: 'incoming', offer: invite.offer, expires })
+      show({
+        id: invite.id, state: 'incoming', offer: invite.offer, expires,
+        remoteCandidates: invite.caller_candidates ?? [],
+      })
       arm(invite.id, expires - Date.now() + 300, 'Missed voice call.', 'expire')
     } else if (
       current?.id === invite.id &&
@@ -329,6 +409,7 @@ export function VoiceCallProvider({
       arm(invite.id, 30000, 'The connection could not be established.')
       void peer.current
         .setRemoteDescription({ type: 'answer', sdp: invite.answer })
+        .then(() => flushRemoteIce(invite.id))
         .catch(() => {
           if (active.current?.id === invite.id)
             end('The connection could not be established.')
@@ -352,6 +433,16 @@ export function VoiceCallProvider({
               : 'Missed voice call.',
         )
       }
+    }
+    // Realtime sends full row snapshots. Apply each remote candidate exactly
+    // once, even if the fallback poll receives the same snapshot repeatedly.
+    if (active.current?.id === invite.id) {
+      queueRemoteIce(
+        invite.id,
+        invite.caller_id === me.id
+          ? invite.recipient_candidates ?? []
+          : invite.caller_candidates ?? [],
+      )
     }
   }
 
@@ -397,7 +488,7 @@ export function VoiceCallProvider({
     void refresh()
     const poll = setInterval(() => {
       if (!document.hidden || active.current) void refresh()
-    }, 3500)
+    }, 1500)
     window.addEventListener('focus', refresh)
     return () => {
       alive = false
