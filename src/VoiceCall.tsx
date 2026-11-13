@@ -354,7 +354,7 @@ export function VoiceCallProvider({
             .then(({ error }) => {
               if (!error && active.current?.id === id)
                 connectedRecorded.current = id
-            }).catch(() => {})
+            }, () => {})
         }
         monitorQuality(id, connection)
       } else if (connection.connectionState === 'failed') {
