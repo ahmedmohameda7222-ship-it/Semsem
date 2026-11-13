@@ -67,7 +67,7 @@ export function CustomCardEditor({
         </div>
         <h3>Add your own {name}</h3>
         <p className="hint intimate-consent">
-          Saved for both of you. You can send it whenever you want.
+          This card stays yours. Only the sent message appears in your partner's chat.
         </p>
         <form onSubmit={(event) => void save(event)}>
           <label className="field-label" htmlFor={'custom-title-' + kind}>Card title</label>
