@@ -46,6 +46,7 @@ export type Entry = {
   duration_seconds?: number | null
   reply_text?: string | null
   in_reply_to?: string | null
+  is_private?: boolean
 }
 export type Reaction = { entry_id: string; user_id: string; reaction: string }
 export type Milestone = {
