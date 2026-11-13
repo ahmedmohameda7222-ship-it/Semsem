@@ -744,6 +744,7 @@ test('daily messages send normal chat content only after explicit confirmation',
 })
 
 test('custom daily and private cards are shared and private sends retain redaction', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
   const saved: Record<string, unknown>[] = []
   let customPrivate: Record<string, unknown> | undefined
   await page.route('**/rest/v1/shared_cards?**', async (route) => {

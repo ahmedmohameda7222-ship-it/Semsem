@@ -182,7 +182,7 @@ export function IntimateRequests({ me, partner }: { me: Profile; partner?: Profi
           if (event.currentTarget === event.target) close()
         }}>
           <div role="dialog" aria-modal="true" aria-label="Private intimate request"
-            aria-labelledby="intimate-compose-title" className="intimate-compose">
+            className="intimate-compose">
             <div className="row spread intimate-compose-top">
               <span className="intimate-private-indicator">
                 <LockKeyhole size={15} /> Private request

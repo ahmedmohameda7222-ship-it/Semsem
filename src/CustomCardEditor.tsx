@@ -89,7 +89,7 @@ export function CustomCardEditor({
           <div className="intimate-compose-actions mt16">
             <button type="button" className="outline" disabled={busy} onClick={onClose}>Cancel</button>
             <button type="submit" className="primary" disabled={busy || !title.trim() || !message.trim()}>
-              {busy ? 'Saving…' : 'Save ' + name}
+              {busy ? 'Saving…' : (privateMode ? 'Save private request' : 'Save daily note')}
             </button>
           </div>
         </form>
