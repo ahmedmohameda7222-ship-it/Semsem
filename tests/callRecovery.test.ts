@@ -27,6 +27,12 @@ test('route indicator reports the actual selected candidate, not merely TURN cre
   const relay = direct.map((row) => row.id === 'local' ? { ...row, candidateType: 'relay' } : row)
   assert.equal(selectedAudioRoute(direct), 'Direct peer-to-peer route')
   assert.equal(selectedAudioRoute(relay), 'TURN relay route')
+  const remoteRelay = [
+    ...direct.map((row) => row.id === 'pair'
+      ? { ...row, remoteCandidateId: 'other' } : row),
+    { id: 'other', type: 'remote-candidate', candidateType: 'relay' },
+  ]
+  assert.equal(selectedAudioRoute(remoteRelay), 'TURN relay route')
   assert.equal(selectedAudioRoute([]), 'Audio route connected')
 })
 
