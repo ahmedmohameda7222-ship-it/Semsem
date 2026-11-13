@@ -926,3 +926,221 @@
   font-weight: 600;
   text-align: center;
 }
+
+/* A private, consent-aware extension of the existing romantic card system. */
+.intimate-section {
+  margin-top: 22px;
+  min-width: 0;
+}
+.intimate-heading {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.intimate-private-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--primary);
+}
+.intimate-intro {
+  margin: 2px 0 13px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.intimate-category-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 9px;
+}
+.intimate-category-tabs button {
+  min-height: 55px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 4px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--ink);
+  line-height: 1.2;
+  font-size: 11px;
+  font-weight: 650;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: normal;
+}
+.intimate-category-tabs button[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: var(--subtle);
+  color: var(--primary);
+}
+.intimate-category-tabs button span:first-child {
+  font-size: 19px;
+  line-height: 1;
+}
+.intimate-category-subtitle {
+  margin: 7px 0 11px;
+  font-size: 11px;
+}
+.intimate-request-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.intimate-request-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  min-height: 144px;
+  padding: 13px 12px 11px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: 0 3px 18px rgb(0 0 0 / 2%);
+}
+.intimate-request-tile:active { transform: scale(0.985); }
+.intimate-request-tile .intimate-request-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--subtle);
+  display: grid;
+  place-items: center;
+}
+.intimate-request-emoji {
+  font-size: 23px;
+  line-height: 1;
+}
+.intimate-request-tile strong {
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 700;
+  overflow-wrap: break-word;
+}
+.intimate-tap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: auto;
+}
+.intimate-send-toast { z-index: 50; }
+.intimate-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: max(15px, env(safe-area-inset-top)) 15px max(16px, env(safe-area-inset-bottom));
+  background: rgb(30 12 25 / 60%);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.intimate-compose {
+  box-sizing: border-box;
+  width: min(100%, 430px);
+  max-height: min(92dvh, 680px);
+  min-width: 0;
+  overflow-y: auto;
+  padding: 19px 18px 20px;
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 90px rgb(0 0 0 / 21%);
+}
+.intimate-compose-top {
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.intimate-close {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--subtle);
+  color: var(--ink);
+}
+.intimate-compose-emoji { font-size: 32px; margin: 8px 0; }
+.intimate-compose h3 {
+  font-size: 21px;
+  line-height: 1.25;
+  letter-spacing: -.45px;
+}
+.intimate-consent {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 10px 0 19px;
+}
+.intimate-compose label { display: block; margin-bottom: 7px; }
+.intimate-compose textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 95px;
+  padding: 12px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  resize: vertical;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+}
+.intimate-lock-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 10px 0 15px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.intimate-lock-notice svg { flex: 0 0 13px; margin-top: 2px; }
+.intimate-compose-actions {
+  display: flex;
+  gap: 9px;
+}
+.intimate-compose-actions button {
+  min-width: 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.intimate-compose-actions .outline { flex: 1; }
+.intimate-compose-actions .primary { flex: 1.7; }
+.chat-private-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--primary);
+  margin-top: 4px;
+}
+@media (max-width: 350px) {
+  .intimate-category-tabs { gap: 4px; }
+  .intimate-category-tabs button { font-size: 10px; padding-inline: 2px; }
+  .intimate-request-grid { gap: 8px; }
+  .intimate-request-tile { padding-inline: 10px; }
+  .intimate-compose { padding: 14px 13px 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .intimate-request-tile:active { transform: none; }
+}
