@@ -143,3 +143,33 @@ test('incoming call notification opens the durable invitation', async () => {
   await done
   assert.equal(path, '/chat?call=' + call)
 })
+
+test('private intimate request push never contains its title or private body', () => {
+  const job = {
+    event_id: 'private-entry',
+    sender_nickname: 'Semsem',
+    title: 'Private Request',
+    body: 'Open Our Space to view a private request.',
+  }
+  const payload = pushPayload(job)
+  assert.deepEqual(payload,{
+    entry: 'private-entry',
+    title: 'Semsem ❤️‍🔥 · Private Request',
+    body: 'Open Our Space to view a private request.',
+  })
+  assert.equal(JSON.stringify(payload).includes('sex'),false)
+})
+
+test('ordinary Attention Request and chat notifications stay fully readable', () => {
+  assert.equal(pushPayload({
+    event_id:'chat',
+    sender_nickname:'Sasa',
+    body:'Miss you ❤️',
+  }).body,'Miss you ❤️')
+  assert.equal(pushPayload({
+    event_id:'req',
+    sender_nickname:'Sasa',
+    title:'I need a hug',
+    body:'Come here 🥺',
+  }).body,'I need a hug — Come here 🥺')
+})

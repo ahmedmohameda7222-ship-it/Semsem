@@ -679,3 +679,44 @@ test('answer is acknowledged without waiting for all TURN ICE candidates', async
     () => (window as typeof window & { __receivedIce?: number }).__receivedIce ?? 0,
   )).toBeGreaterThan(0)
 })
+
+test('intimate requests are opt-in, editable, private, and responsive on iPhones', async ({ page }, info) => {
+  let sent: { request_code?: string; message?: string; entry?: string } | undefined
+  await page.route('**/rest/v1/rpc/send_intimate_request', (route) => {
+    sent = route.request().postDataJSON()
+    return route.fulfill({ json: sent?.entry ?? null })
+  })
+  await page.setViewportSize({ width: 320, height: 780 })
+  await page.goto('/home')
+  await expect(page.getByRole('heading', { name: 'Intimate Requests' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Direct & Intimate' })).toBeVisible()
+  const direct = page.getByRole('region', { name: 'Intimate Requests' })
+  await direct.getByRole('button', { name: /I want to have sex with you/ }).click()
+  const composer = page.getByRole('dialog', { name: 'Private intimate request' })
+  await expect(composer).toBeVisible()
+  await expect(composer.getByText(/only if you both feel like it/i)).toBeVisible()
+  await expect(composer.getByRole('button', { name: 'Cancel' })).toBeVisible()
+  await composer.getByRole('button', { name: 'Cancel' }).click()
+  await expect(composer).toHaveCount(0)
+  expect(sent).toBeUndefined()
+
+  await direct.getByRole('button', { name: /I want to have sex with you/ }).click()
+  await composer.getByRole('textbox', { name: 'Personal message' }).fill('I miss being close to you ❤️')
+  await composer.getByRole('button', { name: 'Send private request' }).click()
+  await expect.poll(() => sent?.request_code).toBe('sex_tonight')
+  expect(sent?.message).toBe('I miss being close to you ❤️')
+  await expect(composer).toHaveCount(0)
+  await expect(page.getByText(/Sent privately to Semsem/)).toBeVisible()
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+  await page.screenshot({ path: info.outputPath('intimate-requests-320.png') })
+
+  for (const width of [375, 390, 430]) {
+    await page.setViewportSize({ width, height: 820 })
+    await direct.getByRole('button', { name: 'Flirty & Teasing' }).click()
+    await expect(direct.getByRole('button', { name: /I need a passionate kiss/ })).toBeVisible()
+    await direct.getByRole('button', { name: 'Romantic & Private' }).click()
+    await expect(direct.getByRole('button', { name: /I want to cuddle with you/ })).toBeVisible()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+    await page.screenshot({ path: info.outputPath('intimate-requests-' + width + '.png') })
+  }
+})
