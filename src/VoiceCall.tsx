@@ -136,6 +136,7 @@ export function VoiceCallProvider({
   const microphoneRetryBusy = useRef(false)
   const lastMicrophoneRetry = useRef(0)
   const mutedRef = useRef(false)
+  const isCaller = useRef(false)
 
   function show(next?: Call) {
     active.current = next
@@ -160,6 +161,7 @@ export function VoiceCallProvider({
     awaitingRecoveryAnswer.current = 0
     remoteIcePaused.current = false
     mutedRef.current = false
+    isCaller.current = false
     microphoneRetryBusy.current = false
     qualityWatch.current = new NetworkQualityWatch()
     connectedRecorded.current = undefined
@@ -265,6 +267,7 @@ export function VoiceCallProvider({
         const { error } = await db.rpc('push_voice_candidates_v2', {
           call_id: id, candidate_list: batch, expected_seq: seq,
         })
+        if (recoverySeq.current !== seq) break
         if (error) { retry = true; break }
         pendingLocalIce.current.splice(0, batch.length)
       }
@@ -331,11 +334,25 @@ export function VoiceCallProvider({
     setNetworkStatus('Restoring the audio path…')
     try {
       if (current.id && current.id === id && current.state !== 'incoming') {
-        // The original caller is the sole restart-offer author to avoid SDP glare.
-        const invite = unwrap(await db.from('voice_calls').select('caller_id').eq('id', id).single())
-        if (active.current?.id !== id) return
-        if (invite?.caller_id === me.id) {
+        // The original caller alone publishes restart offers to avoid SDP glare.
+        if (isCaller.current) {
           const oldSeq = recoverySeq.current
+          // TURN tokens expire on long calls. Refresh server-generated credentials.
+          try {
+            const freshIce = await requestVoice('ice')
+            if (active.current?.id === id && freshIce.relay) {
+              connection.setConfiguration({
+                ...connection.getConfiguration(),
+                iceServers: freshIce.iceServers,
+              })
+              setRelayAvailable(true)
+              setTurnStatus(freshIce.turnStatus ?? null)
+            }
+          } catch { /* preserve the existing TURN configuration */ }
+          if (active.current?.id !== id || connection.signalingState !== 'stable') return
+          remoteIcePaused.current = true
+          pendingRemoteIce.current = []
+          seenRemoteIce.current.clear()
           const description = await connection.createOffer({ iceRestart: true })
           if (!description.sdp || active.current?.id !== id) return
           localIceReady.current = false
@@ -357,6 +374,7 @@ export function VoiceCallProvider({
         }
       }
     } catch {
+      remoteIcePaused.current = false
       if (active.current?.id === id && ['have-local-offer'].includes(connection.signalingState)) {
         try { await connection.setLocalDescription({ type: 'rollback' }) } catch { /* best effort */ }
         localIceReady.current = true
@@ -562,17 +580,25 @@ export function VoiceCallProvider({
     if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection)
       throw new Error('Voice calling is unavailable in this browser.')
     configureCallAudioSession(navigator as unknown as Parameters<typeof configureCallAudioSession>[0])
-    const stream = await navigator.mediaDevices.getUserMedia({
+    const microphoneTask = navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     })
+    let stream: MediaStream
+    let configuration: Awaited<ReturnType<typeof requestVoice>>
+    try {
+      [stream, configuration] = await Promise.all([microphoneTask, requestVoice('ice')])
+    } catch (error) {
+      void microphoneTask.then((media) =>
+        media.getTracks().forEach((track) => track.stop())).catch(() => {})
+      throw error
+    }
     if (active.current?.id !== id) {
       stream.getTracks().forEach((track) => track.stop())
       return
     }
     microphone.current = stream
     for (const track of stream.getAudioTracks()) watchMicrophone(id, track)
-    const { iceServers, relay, turnStatus: providerStatus } = await requestVoice('ice')
-    if (active.current?.id !== id) return
+    const { iceServers, relay, turnStatus: providerStatus } = configuration
     setRelayAvailable(relay)
     setTurnStatus(providerStatus ?? null)
     setNetworkStatus(relay ? 'TURN available · selecting audio path' : 'Direct connection only · TURN unavailable')
@@ -692,6 +718,7 @@ export function VoiceCallProvider({
     const current: Call = incoming
       ? { ...incoming, state: 'connecting' }
       : { id: crypto.randomUUID(), state: 'calling' }
+    isCaller.current = !incoming
     setMinimized(false)
     setMessage('')
     show(current)
