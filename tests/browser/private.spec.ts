@@ -594,8 +594,9 @@ test('outgoing call notifies partner immediately without waiting for ICE gatheri
       caller_candidates: [], recipient_candidates: [],
     } })
   })
-  await page.route('**/rest/v1/rpc/push_voice_candidates', (route) => {
+  await page.route('**/rest/v1/rpc/push_voice_candidates_v2', (route) => {
     const payload = route.request().postDataJSON()
+    expect(payload.expected_seq).toBe(0)
     expect(payload.candidate_list[0].candidate).toContain('candidate:1')
     trickled += payload.candidate_list.length
     return route.fulfill({ json: null })
@@ -789,4 +790,118 @@ test('custom daily and private cards are visible only to their owner', async ({ 
   await expect.poll(() => customPrivate?.card_title).toBe('Our quiet evening')
   await expect.poll(() => customPrivate?.card_message).toBe('I want a night just for us ❤️')
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+})
+
+
+test('a failed established call initiates ICE recovery without hanging up or ringing again', async ({ page }) => {
+  await page.addInitScript(() => {
+    class RecoveryPeer {
+      connectionState = 'new'
+      iceConnectionState = 'new'
+      signalingState = 'stable'
+      localDescription: RTCSessionDescriptionInit | null = null
+      remoteDescription: RTCSessionDescriptionInit | null = null
+      onicecandidate: ((event: { candidate: null }) => void) | null = null
+      ontrack: ((event: unknown) => void) | null = null
+      onconnectionstatechange: (() => void) | null = null
+      oniceconnectionstatechange: (() => void) | null = null
+      addTrack() {}
+      getStats() { return Promise.resolve(new Map()) }
+      createOffer(options?: { iceRestart?: boolean }) {
+        return Promise.resolve({ type: 'offer' as const,
+          sdp: 'v=0\r\na=ice-ufrag:' + (options?.iceRestart ? 'restarted' : 'first') + '\r\n' })
+      }
+      async setLocalDescription(desc: RTCSessionDescriptionInit) {
+        this.localDescription = desc
+        this.signalingState = desc.type === 'offer' ? 'have-local-offer' : 'stable'
+      }
+      async setRemoteDescription(desc: RTCSessionDescriptionInit) {
+        this.remoteDescription = desc
+        this.signalingState = 'stable'
+        if (desc.type === 'answer') {
+          this.connectionState = 'connected'
+          this.iceConnectionState = 'connected'
+          queueMicrotask(() => this.onconnectionstatechange?.())
+        }
+      }
+      addIceCandidate() { return Promise.resolve() }
+      getSenders() { return [] }
+      close() { this.connectionState = 'closed' }
+    }
+    Object.defineProperty(window, 'RTCPeerConnection', {
+      configurable: true,
+      value: class extends RecoveryPeer {
+        constructor() {
+          super()
+          Object.assign(window, { __voicePeer: this })
+        }
+      },
+    })
+  })
+  let callId = ''
+  let recoveryOffers = 0
+  let endRequests = 0
+  let createdCalls = 0
+  let current: Record<string, unknown> = {}
+  await page.route('**/api/voice', (route) => {
+    const action = route.request().postDataJSON().action
+    if (action === 'ice') return route.fulfill({
+      json: { iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }], relay: false, turnStatus: 'not_configured' },
+    })
+    return route.fulfill({ json: { attempted: 1, accepted: 1 } })
+  })
+  await page.route('**/rest/v1/rpc/start_voice', (route) => {
+    createdCalls++
+    const data = route.request().postDataJSON()
+    callId = data.call_id
+    current = {
+      id: callId, caller_id: first, recipient_id: second,
+      status: 'answered', offer: data.offer_sdp,
+      answer: 'v=0\r\na=ice-ufrag:answer\r\n',
+      recovery_seq: 0, recovery_requested_at: null,
+      recovery_offer: null, recovery_answer: null,
+      caller_candidates: [], recipient_candidates: [],
+      expires_at: new Date(Date.now() + 90000).toISOString(),
+    }
+    return route.fulfill({ json: { ...current, status: 'ringing', answer: null } })
+  })
+  await page.route('**/rest/v1/rpc/recover_voice', (route) => {
+    const body = route.request().postDataJSON()
+    if (body.operation === 'offer') {
+      recoveryOffers++
+      current = {
+        ...current, recovery_seq: 1, recovery_offer: body.offer_sdp,
+      }
+    }
+    return route.fulfill({ json: current })
+  })
+  await page.route('**/rest/v1/rpc/change_voice', (route) => {
+    const body = route.request().postDataJSON()
+    if (body.operation === 'end') endRequests++
+    return route.fulfill({ json: current })
+  })
+  await page.route('**/rest/v1/rpc/mark_voice_connected', (route) =>
+    route.fulfill({ json: new Date().toISOString() }))
+  await page.route('**/rest/v1/voice_calls?**', (route) =>
+    route.fulfill({ json: current }))
+  await page.goto('/chat')
+  await page.getByRole('button', { name: 'Start voice call' }).click()
+  await expect(page.getByRole('region', { name: 'Connected' })).toBeVisible({ timeout: 10000 })
+  await page.evaluate(() => {
+    const connection = (window as Window & {
+      __voicePeer?: {
+        connectionState: string; iceConnectionState: string
+        onconnectionstatechange: (() => void) | null
+      }
+    }).__voicePeer
+    if (!connection) throw new Error('Fake WebRTC peer unavailable')
+    connection.connectionState = 'failed'
+    connection.iceConnectionState = 'failed'
+    connection.onconnectionstatechange?.()
+  })
+  await expect(page.getByRole('region', { name: 'Connected' })).toBeVisible()
+  await expect.poll(() => recoveryOffers, { timeout: 10000 }).toBe(1)
+  expect(endRequests).toBe(0)
+  expect(createdCalls).toBe(1)
+  expect(callId).toMatch(/^[0-9a-f-]{36}$/)
 })
